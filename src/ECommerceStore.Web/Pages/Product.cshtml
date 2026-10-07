@@ -1,0 +1,269 @@
+@page "/product/{slug}"
+@model ECommerceStore.Web.Pages.ProductModel
+@using ECommerceStore.Core.Constants
+@{
+    ViewData["Title"] = Model.Product.Name;
+    var p = Model.Product;
+}
+
+<a href="/#products" class="back-link">&larr; All fabrics</a>
+
+    <section class="product-hero" id="product">
+        <div class="product-media">
+            <div class="product-media-wrapper">
+                <img src="@p.GalleryImages[0]" alt="@p.Name" id="mainProductImage" />
+                @if (p.DiscountPercent > 0)
+                {
+                    <span class="discount-banner">-@p.DiscountPercent%</span>
+                }
+            </div>
+            @if (p.GalleryImages.Count > 1)
+            {
+                <div class="gallery-thumbs" role="group" aria-label="Product photos">
+                    @for (var i = 0; i < p.GalleryImages.Count; i++)
+                    {
+                        <button type="button" class="gallery-thumb @(i == 0 ? "active" : "")" data-full="@p.GalleryImages[i]" aria-label="Show photo @(i + 1) of @p.GalleryImages.Count">
+                            <img src="@p.GalleryImages[i]" alt="" loading="lazy" />
+                        </button>
+                    }
+                </div>
+            }
+        </div>
+        <div class="product-details">
+            <div class="product-heading-meta">
+                <span class="product-category">Medical Scrub Set</span>
+            </div>
+            <h1>@p.Name</h1>
+            @if (p.Rating.Count > 0)
+            {
+                <a href="#reviews" class="rating-link"><partial name="_Stars" model="p.Rating" /></a>
+            }
+            <div class="price-container">
+                <span class="price-current">@p.Price.ToString("N2") <small>EGP</small></span>
+                @if (p.DiscountPercent > 0)
+                {
+                    <span class="price-original">@p.OriginalPrice.ToString("N2") EGP</span>
+                }
+            </div>
+            <p class="description">@p.Description</p>
+
+            @if (!p.InStock)
+            {
+                <div class="stock-alert out-of-stock">
+                    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                    <span>Currently out of stock. Check back soon for the next restock.</span>
+                </div>
+            }
+            else
+            {
+                <form method="get" asp-page="/Checkout" class="order-form">
+                    <input type="hidden" name="productId" value="@p.Id" />
+
+                    <!-- Gender selector: modern segmented pill control -->
+                    <div class="option-group">
+                        <label class="group-label">Department / Fit</label>
+                        <div class="segmented-control" role="radiogroup" aria-label="Gender / Fit Selection">
+                            <label class="segment-option">
+                                <input type="radio" name="gender" value="Male" @(Model.SelectedGender == "Male" ? "checked" : "") />
+                                <span class="segment-label">
+                                    <svg class="segment-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                        <circle cx="10" cy="14" r="5"></circle>
+                                        <line x1="19" y1="5" x2="13.6" y2="10.4"></line>
+                                        <polyline points="19 10 19 5 14 5"></polyline>
+                                    </svg>
+                                    Men's Fit
+                                </span>
+                            </label>
+                            <label class="segment-option">
+                                <input type="radio" name="gender" value="Female" @(Model.SelectedGender == "Female" ? "checked" : "") />
+                                <span class="segment-label">
+                                    <svg class="segment-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                        <circle cx="12" cy="9" r="5"></circle>
+                                        <line x1="12" y1="14" x2="12" y2="21"></line>
+                                        <line x1="9" y1="18" x2="15" y2="18"></line>
+                                    </svg>
+                                    Women's Fit
+                                </span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- Size selector & expandable chart -->
+                    <div class="option-group">
+                        <div class="group-header">
+                            <label class="group-label">Size</label>
+                            <button type="button" class="size-chart-trigger" id="sizeChartToggle" aria-expanded="false" aria-controls="sizeChartDropdown">
+                                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
+                                    <polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline>
+                                    <line x1="12" y1="22.08" x2="12" y2="12"></line>
+                                </svg>
+                                Size guide &amp; chart
+                                <span class="toggle-arrow">&darr;</span>
+                            </button>
+                        </div>
+
+                        <div class="size-pills" role="radiogroup" aria-label="Select Size">
+                            @foreach (var size in ProductSizes.All)
+                            {
+                                <label class="size-pill">
+                                    <input type="radio" name="size" value="@size" @(Model.SelectedSize == size ? "checked" : "") />
+                                    <span>@size</span>
+                                </label>
+                            }
+                        </div>
+
+                        <!-- Expandable size charts: the one matching the chosen fit (men / women) is shown. All measurements in cm. -->
+                        <div id="sizeChartDropdown" class="size-chart-dropdown" hidden>
+                            @foreach (var chart in Model.SizeCharts)
+                            {
+                                <div class="size-chart-content" data-chart="@chart.Gender" hidden="@(Model.SelectedGender != chart.Gender)">
+                                    <div class="size-chart-header">
+                                        <span class="chart-title">@chart.Title Size Chart (cm)</span>
+                                        <span class="chart-hint">Pants &bull; Waist &bull; Top &bull; Weight</span>
+                                    </div>
+                                    <div class="table-responsive">
+                                        <table class="size-table">
+                                            <thead>
+                                                <tr>
+                                                    <th>Size</th>
+                                                    <th>Pants length</th>
+                                                    <th>Waist</th>
+                                                    <th>Top chest</th>
+                                                    <th>Top length</th>
+                                                    <th>Weight (kg)</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                @foreach (var row in chart.Rows)
+                                                {
+                                                    <tr class="@(row.Size == Model.SelectedSize ? "highlighted" : "")">
+                                                        <td><strong>@row.Size</strong></td>
+                                                        <td>@row.PantsLength</td>
+                                                        <td>@row.Waist</td>
+                                                        <td>@row.TopChest</td>
+                                                        <td>@row.TopLength</td>
+                                                        <td>@row.Weight</td>
+                                                    </tr>
+                                                }
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    </div>
+
+                    @if (p.HasColors)
+                    {
+                        <div class="color-picker option-group">
+                            <div class="group-header">
+                                <label class="group-label">Colour</label>
+                                <span class="selected-color-name hint" data-role="color-status">Select a colour</span>
+                            </div>
+                            <div class="swatches">
+                                @foreach (var c in p.Colors)
+                                {
+                                    <button type="button"
+                                            class="swatch @(!c.InStock ? "out-of-stock" : "")"
+                                            style="--swatch-color: @c.HexCode"
+                                            data-color-id="@c.Id" data-name="@c.Name"
+                                            title="@(c.InStock ? c.Name : $"{c.Name} — out of stock")"
+                                            aria-label="@c.Name">
+                                    </button>
+                                }
+                            </div>
+                            <input type="hidden" name="colorId" data-role="color-input" value="@Model.SelectedColorId" />
+                        </div>
+                    }
+
+                    <div class="option-group quantity-row">
+                        <label class="group-label" for="quantity">Quantity</label>
+                        <div class="qty-stepper">
+                            <button type="button" class="qty-btn qty-minus" aria-label="Decrease quantity">&minus;</button>
+                            <input type="number" id="quantity" name="quantity" value="@Model.SelectedQuantity" min="1" max="@Model.InitialMaxQuantity" required />
+                            <button type="button" class="qty-btn qty-plus" aria-label="Increase quantity">&plus;</button>
+                        </div>
+                    </div>
+
+                    <div class="cta-actions">
+                        <button type="submit" class="btn-primary btn-cta">
+                            <span>Proceed to Checkout</span>
+                            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                                <line x1="5" y1="12" x2="19" y2="12"></line>
+                                <polyline points="12 5 19 12 12 19"></polyline>
+                            </svg>
+                        </button>
+                        <div class="cta-trust-bar">
+                            <span class="trust-item"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg> Safe Checkout</span>
+                            <span class="trust-item"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="3" width="15" height="13"></rect><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"></polygon><circle cx="5.5" cy="18.5" r="2.5"></circle><circle cx="18.5" cy="18.5" r="2.5"></circle></svg> Doorstep Delivery</span>
+                            <span class="trust-item"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"></polyline><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path></svg> Easy Fit Exchange</span>
+                        </div>
+                    </div>
+                </form>
+                <p class="stock-note" id="stockNote" hidden><span class="pulse-indicator"></span> <span data-role="stock-note-text"></span></p>
+            }
+
+            <script type="application/json" id="stock-data">@Html.Raw(Model.StockJson)</script>
+
+            <!-- "Remind me when it's back": shown by stock-reminder.js when any colour/size is sold out -->
+            <div class="remind" id="remindBox" hidden>
+                <button type="button" class="remind-toggle" id="remindToggle" aria-expanded="false" aria-controls="remindForm">
+                    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg>
+                    Remind me when it is back
+                </button>
+                <form method="post" asp-page-handler="Remind" asp-route-slug="@p.Slug" class="remind-form" id="remindForm" hidden>
+                    <label for="remindVariant">Which one?</label>
+                    <select id="remindVariant" name="variant"></select>
+                    <label for="remindEmail">Your e-mail</label>
+                    <input id="remindEmail" name="email" type="email" autocomplete="email" required value="@Model.CustomerEmail" />
+                    <button type="submit" class="btn-primary">Notify me</button>
+                    <p class="remind-message" id="remindMessage" role="status"></p>
+                </form>
+            </div>
+        </div>
+    </section>
+
+    <!-- Trust banner strip -->
+    <section class="trust-banner">
+        <div class="trust-banner-grid">
+            <div class="trust-cell">
+                <div class="trust-icon-box">
+                    <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="3" width="15" height="13"></rect><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"></polygon><circle cx="5.5" cy="18.5" r="2.5"></circle><circle cx="18.5" cy="18.5" r="2.5"></circle></svg>
+                </div>
+                <div>
+                    <h4>Fast Doorstep Shipping</h4>
+                    <p>Delivered direct to your clinic, hospital or home in 2-4 business days.</p>
+                </div>
+            </div>
+            <div class="trust-cell">
+                <div class="trust-icon-box">
+                    <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="5" width="20" height="14" rx="2"></rect><line x1="2" y1="10" x2="22" y2="10"></line></svg>
+                </div>
+                <div>
+                    <h4>Flexible Payment</h4>
+                    <p>Pay safely with Cash on Delivery, Vodafone Cash, or InstaPay.</p>
+                </div>
+            </div>
+            <div class="trust-cell">
+                <div class="trust-icon-box">
+                    <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                </div>
+                <div>
+                    <h4>Hospital-Grade Quality</h4>
+                    <p>Double-reinforced stitching tailored for demanding 12-hour shifts.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+<partial name="_Reviews" model="Model" />
+
+<partial name="_Faq" />
+
+@section Scripts {
+    <script src="~/js/quantity-stepper.js" asp-append-version="true"></script>
+    <script src="~/js/product-options.js" asp-append-version="true"></script>
+    <script src="~/js/gallery.js" asp-append-version="true"></script>
+    <script src="~/js/stock-reminder.js" asp-append-version="true"></script>
+}

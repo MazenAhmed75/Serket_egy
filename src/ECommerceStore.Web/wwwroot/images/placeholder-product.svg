@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 800">
+  <rect width="800" height="800" fill="#EDE7DA" />
+  <rect x="40" y="40" width="720" height="720" fill="none" stroke="#9C7C3F" stroke-width="1.5" />
+  <path d="M400 300 L414 366 L480 380 L414 394 L400 460 L386 394 L320 380 L386 366 Z" fill="#9C7C3F" />
+  <text x="400" y="500" text-anchor="middle" font-family="Georgia, 'Times New Roman', serif" font-size="42" letter-spacing="10" fill="#2A2013">SERKET</text>
+  <text x="400" y="536" text-anchor="middle" font-family="Georgia, 'Times New Roman', serif" font-size="16" letter-spacing="2" fill="#8A7F68">Product photo coming soon</text>
+</svg>

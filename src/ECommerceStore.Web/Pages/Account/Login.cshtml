@@ -1,0 +1,27 @@
+@page
+@model ECommerceStore.Web.Pages.Account.LoginModel
+@{
+    ViewData["Title"] = "Log in";
+}
+
+<section class="auth-card">
+    <h1>Welcome back</h1>
+    <p class="hint">Log in to check out faster and use promo codes.</p>
+
+    <form method="post" class="checkout-form">
+        <input type="hidden" name="ReturnUrl" value="@Model.ReturnUrl" />
+        <div asp-validation-summary="All" class="validation-summary"></div>
+
+        <label asp-for="Input.Email"></label>
+        <input asp-for="Input.Email" type="email" autocomplete="email" />
+        <span asp-validation-for="Input.Email" class="field-error"></span>
+
+        <label asp-for="Input.Password"></label>
+        <input asp-for="Input.Password" type="password" autocomplete="current-password" />
+        <span asp-validation-for="Input.Password" class="field-error"></span>
+
+        <button type="submit" class="btn-primary btn-cta">Log in</button>
+    </form>
+
+    <p class="auth-switch">New here? <a asp-page="/Account/Register" asp-route-returnUrl="@Model.ReturnUrl">Create an account</a></p>
+</section>

@@ -1,0 +1,83 @@
+@model ECommerceStore.Web.Pages.ProductModel
+@{
+    var p = Model.Product;
+}
+
+<section class="reviews" id="reviews">
+    <div class="section-badge-header">
+        <span class="section-kicker">Reviews</span>
+        <h2>What customers say</h2>
+        @if (p.Rating.Count > 0)
+        {
+            <p class="reviews-summary"><partial name="_Stars" model="p.Rating" /></p>
+        }
+    </div>
+
+    @if (Model.ReviewMessage is not null)
+    {
+        <p class="review-flash @(Model.ReviewSucceeded ? "success" : "error")" role="status">@Model.ReviewMessage</p>
+    }
+
+    <div class="review-list">
+        @if (p.Reviews.Count == 0)
+        {
+            <p class="hint">No reviews yet. Be the first to share what you think.</p>
+        }
+        else
+        {
+            @foreach (var review in p.Reviews)
+            {
+                <article class="review-card">
+                    <header>
+                        <span class="stars" style="--rating: @review.Rating" role="img" aria-label="@review.Rating out of 5 stars">&#9733;&#9733;&#9733;&#9733;&#9733;</span>
+                        <span class="review-author">@review.AuthorName</span>
+                        <time class="review-date" datetime="@review.CreatedAt.ToString("yyyy-MM-dd")">@review.CreatedAt.ToString("dd MMM yyyy")</time>
+                    </header>
+                    @if (!string.IsNullOrWhiteSpace(review.Comment))
+                    {
+                        <p>@review.Comment</p>
+                    }
+                </article>
+            }
+        }
+    </div>
+
+    <div class="review-form-card">
+        <h3>Write a review</h3>
+        @if (!Model.IsLoggedIn)
+        {
+            <p class="hint">
+                <a href="/Account/Login?returnUrl=@Uri.EscapeDataString(Model.PageUrl + "#reviews")">Log in</a>
+                or <a href="/Account/Register?returnUrl=@Uri.EscapeDataString(Model.PageUrl + "#reviews")">create an account</a> to leave a review.
+            </p>
+        }
+        else if (Model.HasReviewed)
+        {
+            <p class="hint">You have already reviewed this product. Thank you!</p>
+        }
+        else
+        {
+            <form method="post" asp-page-handler="Review" asp-route-slug="@p.Slug" class="review-form">
+                <fieldset class="star-input">
+                    <legend>Your rating</legend>
+                    @* Radios are listed 5 to 1 and flipped with CSS so the stars before the chosen one light up. *@
+                    @for (var star = 5; star >= 1; star--)
+                    {
+                        <input type="radio" id="rating-@star" name="rating" value="@star" required />
+                        <label for="rating-@star" title="@star star(s)">&#9733;</label>
+                    }
+                </fieldset>
+
+                <label for="review-comment">Your review (optional)</label>
+                <textarea id="review-comment" name="comment" rows="4" maxlength="1000" placeholder="What did you think of the fabric, fit and comfort?"></textarea>
+
+                <label class="checkbox-label">
+                    <input type="checkbox" name="anonymous" value="true" />
+                    <span>Post anonymously (your name will not be shown)</span>
+                </label>
+
+                <button type="submit" class="btn-primary">Post review</button>
+            </form>
+        }
+    </div>
+</section>

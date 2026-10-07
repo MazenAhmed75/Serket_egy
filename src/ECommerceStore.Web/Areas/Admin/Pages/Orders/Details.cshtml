@@ -1,0 +1,146 @@
+@page "{id:guid}"
+@model ECommerceStore.Web.Areas.Admin.Pages.Orders.DetailsModel
+@using ECommerceStore.Core.Services
+@{
+    ViewData["Title"] = Model.Order is null ? "Order" : $"Order {Model.Order.OrderNumber}";
+}
+
+@section Styles {
+    <link rel="stylesheet" href="~/lib/leaflet/leaflet.css" />
+}
+
+@if (Model.Order is null)
+{
+    <p>Order not found.</p>
+}
+else
+{
+    var o = Model.Order;
+    var firstItem = o.OrderItems.FirstOrDefault();
+
+    <a asp-area="Admin" asp-page="/Orders/Index" class="back-link">&larr; All orders</a>
+    <h1>Order @o.OrderNumber</h1>
+    <span class="status-badge status-@o.OrderStatus.ToString().ToLowerInvariant()">@o.OrderStatus</span>
+
+    @if (Model.StatusMessage is not null)
+    {
+        <p class="status-message">@Model.StatusMessage</p>
+    }
+
+    <div class="details-grid">
+        <section class="details-panel">
+            <h2>Customer</h2>
+            <dl class="admin-dl">
+                <dt>Name</dt><dd>@o.Customer.FullName</dd>
+                <dt>Phone</dt><dd>@o.Customer.PhoneNumber</dd>
+                <dt>Email</dt><dd>@(o.Customer.Email ?? "—")</dd>
+            </dl>
+
+            <h2>Item</h2>
+            <dl class="admin-dl">
+                <dt>Product</dt><dd>@(firstItem?.Product.Name ?? "—")</dd>
+                @if (!string.IsNullOrEmpty(firstItem?.Gender))
+                {
+                    <dt>Gender</dt><dd>@firstItem.Gender</dd>
+                }
+                @if (!string.IsNullOrEmpty(firstItem?.Size))
+                {
+                    <dt>Size</dt><dd>@firstItem.Size</dd>
+                }
+                @if (!string.IsNullOrEmpty(firstItem?.ColorName))
+                {
+                    <dt>Colour</dt><dd>@firstItem.ColorName</dd>
+                }
+                <dt>Quantity</dt><dd>@(firstItem?.Quantity ?? 0)</dd>
+                <dt>Unit price</dt><dd>@(firstItem?.UnitPrice.ToString("N2") ?? "—") EGP</dd>
+                @if (o.SubtotalAmount > 0)
+                {
+                    <dt>Items</dt><dd>@o.SubtotalAmount.ToString("N2") EGP</dd>
+                    @if (o.DiscountAmount > 0)
+                    {
+                        <dt>Discount</dt><dd>-@o.DiscountAmount.ToString("N2") EGP @(string.IsNullOrEmpty(o.PromoCodeText) ? "" : $"({o.PromoCodeText})")</dd>
+                    }
+                    <dt>Shipping</dt><dd>@(o.ShippingAmount <= 0 ? "Free" : o.ShippingAmount.ToString("N2") + " EGP")</dd>
+                }
+                @if (!string.IsNullOrEmpty(o.PromoCodeText))
+                {
+                    <dt>Promo code</dt><dd>@o.PromoCodeText</dd>
+                }
+                <dt>Total</dt><dd>@o.TotalAmount.ToString("N2") EGP</dd>
+                <dt>Payment method</dt><dd>@o.PaymentMethod</dd>
+            </dl>
+
+            <h2>Delivery</h2>
+            <dl class="admin-dl">
+                @if (!string.IsNullOrEmpty(o.Governorate))
+                {
+                    <dt>Governorate</dt><dd>@o.Governorate</dd>
+                    <dt>Area</dt><dd>@o.Area</dd>
+                    <dt>Street</dt><dd>@o.Street</dd>
+                    <dt>Building number</dt><dd>@o.BuildingNumber</dd>
+                }
+                @if (!string.IsNullOrWhiteSpace(o.AddressDetail))
+                {
+                    <dt>Address details</dt><dd>@o.AddressDetail</dd>
+                }
+                <dt>Coordinates</dt>
+                <dd>
+                    @o.Latitude.ToString("F6"), @o.Longitude.ToString("F6")
+                    — <a href="https://www.openstreetmap.org/?mlat=@o.Latitude&amp;mlon=@o.Longitude#map=17/@o.Latitude/@o.Longitude" target="_blank" rel="noopener">open map</a>
+                </dd>
+            </dl>
+            <div id="order-map" data-lat="@Model.Order.Latitude.ToString(System.Globalization.CultureInfo.InvariantCulture)" data-lng="@Model.Order.Longitude.ToString(System.Globalization.CultureInfo.InvariantCulture)"></div>
+
+            @if (o.PaymentReceipts.Count > 0)
+            {
+                <h2>Payment receipts</h2>
+                <div class="receipt-list">
+                    @foreach (var receipt in o.PaymentReceipts.OrderByDescending(r => r.UploadedAt))
+                    {
+                        <div class="receipt-card">
+                            <a asp-page="/Orders/Receipt" asp-route-id="@receipt.Id" target="_blank" rel="noopener">
+                                <img src="@Url.Page("/Orders/Receipt", new { id = receipt.Id })" alt="Payment receipt" />
+                            </a>
+                            <dl class="admin-dl">
+                                <dt>Uploaded</dt><dd>@receipt.UploadedAt.ToLocalTime().ToString("dd MMM yyyy, HH:mm")</dd>
+                                <dt>Reference</dt><dd>@(receipt.TransactionReference ?? "—")</dd>
+                                <dt>Verified</dt><dd>@(receipt.IsVerified ? "Yes" : "No")</dd>
+                            </dl>
+                        </div>
+                    }
+                </div>
+            }
+        </section>
+
+        <aside class="details-actions">
+            <h2>Actions</h2>
+
+            @if (OrderWorkflow.CanVerify(o))
+            {
+                <form method="post" asp-page-handler="Verify" asp-route-id="@o.Id">
+                    <button type="submit" class="btn-primary">Mark payment verified</button>
+                </form>
+            }
+
+            @if (OrderWorkflow.CanShip(o))
+            {
+                <form method="post" asp-page-handler="Ship" asp-route-id="@o.Id">
+                    <button type="submit" class="btn-primary">Mark as shipped</button>
+                </form>
+            }
+
+            @if (OrderWorkflow.CanCancel(o))
+            {
+                <form method="post" asp-page-handler="Cancel" asp-route-id="@o.Id"
+                      data-confirm="Cancel this order? Its items go back in stock.">
+                    <button type="submit" class="btn-secondary">Cancel order</button>
+                </form>
+            }
+        </aside>
+    </div>
+}
+
+@section Scripts {
+    <script src="~/lib/leaflet/leaflet.js"></script>
+    <script src="~/js/order-map.js" asp-append-version="true"></script>
+}

@@ -1,0 +1,11 @@
+@using System.Globalization
+@model ECommerceStore.Core.DTOs.RatingSummary
+@* Five stars filled to the average rating (the fill is drawn by CSS from --rating), plus "4.5 (12)". Renders nothing without ratings. *@
+@if (Model.Count > 0)
+{
+    var average = Model.Average.ToString("0.0", CultureInfo.InvariantCulture);
+    <span class="rating" title="Rated @average out of 5 by @Model.Count customer(s)">
+        <span class="stars" style="--rating: @average" aria-hidden="true">&#9733;&#9733;&#9733;&#9733;&#9733;</span>
+        <span class="rating-text">@average <span class="rating-count">(@Model.Count)</span></span>
+    </span>
+}

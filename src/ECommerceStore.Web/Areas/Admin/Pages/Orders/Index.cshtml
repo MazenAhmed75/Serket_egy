@@ -1,0 +1,84 @@
+@page
+@model ECommerceStore.Web.Areas.Admin.Pages.Orders.IndexModel
+@{
+    ViewData["Title"] = "Orders";
+}
+
+<h1>Orders</h1>
+
+<form method="get" class="order-search" role="search">
+    <input type="search" name="q" value="@Model.Query" placeholder="Search by order number, e.g. ORD-20261003-AB12CD"
+           aria-label="Search orders by order number" autocomplete="off" />
+    @if (Model.StatusFilter is not null)
+    {
+        <input type="hidden" name="status" value="@Model.StatusFilter" />
+    }
+    <button type="submit" class="btn-primary">Search</button>
+    @if (Model.Query is not null)
+    {
+        <a asp-area="Admin" asp-page="/Orders/Index" asp-route-status="@Model.StatusFilter" class="order-search-clear">Clear</a>
+    }
+</form>
+
+<nav class="status-tabs">
+    <a asp-area="Admin" asp-page="/Orders/Index" asp-route-q="@Model.Query" class="@(Model.StatusFilter is null ? "active" : "")">All</a>
+    @foreach (var status in Enum.GetValues<OrderStatus>())
+    {
+        <a asp-area="Admin" asp-page="/Orders/Index" asp-route-status="@status" asp-route-q="@Model.Query"
+           class="@(Model.StatusFilter == status ? "active" : "")">@status</a>
+    }
+</nav>
+
+@if (Model.Orders.Count == 0)
+{
+    <p class="hint">@(Model.Query is null ? "No orders in this view." : $"No orders match \"{Model.Query}\".")</p>
+}
+else
+{
+    <table class="admin-table">
+        <thead>
+            <tr>
+                <th>Order</th>
+                <th>Customer</th>
+                <th>Phone</th>
+                <th>Item</th>
+                <th>Total</th>
+                <th>Payment</th>
+                <th>Status</th>
+                <th>Placed</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var order in Model.Orders)
+            {
+                var firstItem = order.OrderItems.FirstOrDefault();
+                <tr>
+                    <td>@order.OrderNumber</td>
+                    <td>@order.Customer.FullName</td>
+                    <td>@order.Customer.PhoneNumber</td>
+                    <td>
+                        @if (firstItem is null)
+                        {
+                            <span>—</span>
+                        }
+                        else
+                        {
+                            var parts = new List<string>();
+                            if (!string.IsNullOrEmpty(firstItem.Gender)) parts.Add(firstItem.Gender);
+                            if (!string.IsNullOrEmpty(firstItem.Size)) parts.Add(firstItem.Size);
+                            if (!string.IsNullOrEmpty(firstItem.ColorName)) parts.Add(firstItem.ColorName);
+                            var suffix = parts.Count > 0 ? $" ({string.Join(", ", parts)})" : "";
+                            <span>@firstItem.Quantity x @firstItem.Product.Name@suffix</span>
+                        }
+                    </td>
+                    <td>@order.TotalAmount.ToString("N2") EGP</td>
+                    <td>@order.PaymentMethod</td>
+                    <td><span class="status-badge status-@order.OrderStatus.ToString().ToLowerInvariant()">@order.OrderStatus</span></td>
+                    <td>@order.CreatedAt.ToLocalTime().ToString("dd MMM, HH:mm")</td>
+                    <td><a asp-area="Admin" asp-page="/Orders/Details" asp-route-id="@order.Id">View</a></td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}

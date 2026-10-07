@@ -1,0 +1,88 @@
+@page
+@model ECommerceStore.Web.Areas.Admin.Pages.Promos.IndexModel
+@{
+    ViewData["Title"] = "Promo codes";
+}
+
+<h1>Promo codes</h1>
+<p class="hint">Customers type a code at checkout. A code can take a percentage off the items, give free shipping, or both. Each customer account can use each code once, and customers must be logged in to use one.</p>
+
+@if (Model.StatusMessage is not null)
+{
+    <p class="status-message">@Model.StatusMessage</p>
+}
+
+<section class="details-panel">
+    <h2>New promo code</h2>
+    <form method="post" asp-page-handler="Create" class="checkout-form">
+        <div asp-validation-summary="All" class="validation-summary"></div>
+
+        <label asp-for="Input.Code"></label>
+        <input asp-for="Input.Code" type="text" placeholder="e.g. WELCOME10" autocomplete="off" />
+        <span asp-validation-for="Input.Code" class="field-error"></span>
+
+        <p class="hint">What should this code do? Tick one or both.</p>
+
+        <label class="checkbox-label">
+            <input asp-for="Input.GivesPercentDiscount" type="checkbox" />
+            <span>Take a percentage off the items</span>
+        </label>
+        <label asp-for="Input.PercentOff"></label>
+        <input asp-for="Input.PercentOff" type="number" min="1" max="100" />
+        <span asp-validation-for="Input.PercentOff" class="field-error"></span>
+
+        <label class="checkbox-label">
+            <input asp-for="Input.GivesFreeShipping" type="checkbox" />
+            <span>Free shipping</span>
+        </label>
+
+        <button type="submit" class="btn-primary">Create code</button>
+    </form>
+</section>
+
+<h2>Your codes</h2>
+
+@if (Model.Rows.Count == 0)
+{
+    <p class="hint">No promo codes yet.</p>
+}
+else
+{
+    <div class="table-responsive">
+        <table class="admin-table">
+            <thead>
+                <tr>
+                    <th>Code</th>
+                    <th>What it does</th>
+                    <th>Used</th>
+                    <th>Status</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var row in Model.Rows)
+                {
+                    var promo = row.Promo;
+                    var does = new List<string>();
+                    if (promo.PercentOff is > 0) { does.Add($"{promo.PercentOff}% off items"); }
+                    if (promo.FreeShipping) { does.Add("Free shipping"); }
+                    <tr>
+                        <td><strong>@promo.Code</strong></td>
+                        <td>@string.Join(" + ", does)</td>
+                        <td>@row.Uses time(s)</td>
+                        <td>@(promo.IsActive ? "Active" : "Off")</td>
+                        <td class="promo-actions">
+                            <form method="post" asp-page-handler="Toggle" asp-route-id="@promo.Id" class="inline-form">
+                                <button type="submit" class="link-button">@(promo.IsActive ? "Switch off" : "Switch on")</button>
+                            </form>
+                            <form method="post" asp-page-handler="Delete" asp-route-id="@promo.Id" class="inline-form"
+                                  data-confirm="Delete this promo code?">
+                                <button type="submit" class="link-button-danger">Delete</button>
+                            </form>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}

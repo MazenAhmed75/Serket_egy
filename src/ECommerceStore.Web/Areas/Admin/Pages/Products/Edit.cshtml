@@ -1,0 +1,234 @@
+@page "{id:guid}"
+@model ECommerceStore.Web.Areas.Admin.Pages.Products.EditModel
+@{
+    ViewData["Title"] = "Edit product";
+}
+
+<p><a asp-page="./Index">&larr; All products</a></p>
+<h1>@Model.Input.Name</h1>
+<p class="hint">
+    Home page card and product page: <a href="/product/@Model.ProductSlug" target="_blank" rel="noopener">view on the site</a>.
+    The main photo below is the picture on the home page card and the first photo on the product page.
+</p>
+
+@if (Model.StatusMessage is not null)
+{
+    <p class="status-message">@Model.StatusMessage</p>
+}
+
+<div class="details-grid">
+    <section class="details-panel">
+        <form method="post" enctype="multipart/form-data" class="checkout-form">
+            <div asp-validation-summary="All" class="validation-summary"></div>
+
+            <label asp-for="Input.Name"></label>
+            <input asp-for="Input.Name" type="text" />
+            <span asp-validation-for="Input.Name" class="field-error"></span>
+
+            <label asp-for="Input.ShortDescription"></label>
+            <input asp-for="Input.ShortDescription" type="text" maxlength="200" />
+            <span asp-validation-for="Input.ShortDescription" class="field-error"></span>
+
+            <label asp-for="Input.Description"></label>
+            <textarea asp-for="Input.Description" rows="4"></textarea>
+            <span asp-validation-for="Input.Description" class="field-error"></span>
+
+            <label asp-for="Input.Price"></label>
+            <input asp-for="Input.Price" type="number" step="0.01" min="0.01" />
+            <span asp-validation-for="Input.Price" class="field-error"></span>
+
+            <h2>Discount</h2>
+            <p class="hint">While the discount is on, the product shows a banner with the percentage, the old price is crossed out, and customers pay the lower price. Turn it off to go back to the normal price (the percentage is remembered).</p>
+            <label class="checkbox-label">
+                <input asp-for="Input.DiscountActive" type="checkbox" />
+                <span>@Html.DisplayNameFor(m => m.Input.DiscountActive)</span>
+            </label>
+            <label asp-for="Input.DiscountPercent"></label>
+            <input asp-for="Input.DiscountPercent" type="number" min="1" max="99" />
+            <span asp-validation-for="Input.DiscountPercent" class="field-error"></span>
+
+            <label asp-for="Input.SortOrder"></label>
+            <input asp-for="Input.SortOrder" type="number" min="0" max="1000" />
+            <span asp-validation-for="Input.SortOrder" class="field-error"></span>
+
+            <p class="hint">Stock is set per colour and size in the "Stock by size" table further down this page.</p>
+
+            <label class="checkbox-label">
+                <input asp-for="Input.IsActive" type="checkbox" />
+                <span>Active (visible on the storefront)</span>
+            </label>
+
+            <label asp-for="Input.ImageFile">Main photo (replaces the current one)</label>
+            <input asp-for="Input.ImageFile" type="file" accept="image/jpeg,image/png,image/webp" />
+            <span asp-validation-for="Input.ImageFile" class="field-error"></span>
+
+            <button type="submit" class="btn-primary">Save product</button>
+        </form>
+    </section>
+
+    <aside class="details-actions">
+        <h2>Current photo</h2>
+        @if (!string.IsNullOrEmpty(Model.CurrentImageUrl))
+        {
+            <img src="@Model.CurrentImageUrl" alt="Current product photo" class="current-product-photo" />
+        }
+        else
+        {
+            <p class="hint">No photo uploaded yet.</p>
+        }
+        <p class="hint">Uploading a new photo replaces this one. Leave the field empty to keep it.</p>
+    </aside>
+</div>
+
+<h2>Gallery photos</h2>
+<p class="hint">Optional extra photos (back, fabric close-up, on-model). The main photo above is always shown first; these appear as thumbnails on the storefront.</p>
+
+@if (Model.ExistingProductId is null)
+{
+    <p class="hint">Save the product above first, then come back to add photos.</p>
+}
+else
+{
+    @if (Model.GalleryImages.Count > 0)
+    {
+        <div class="admin-gallery">
+            @foreach (var img in Model.GalleryImages)
+            {
+                <div class="admin-gallery-item">
+                    <img src="@img.ImageUrl" alt="Gallery photo" />
+                    <form method="post" asp-page-handler="DeleteGalleryImage" asp-route-imageId="@img.Id"
+                          data-confirm="Remove this photo?">
+                        <button type="submit" class="link-button-danger">Remove</button>
+                    </form>
+                </div>
+            }
+        </div>
+    }
+    else
+    {
+        <p class="hint">No extra photos yet.</p>
+    }
+
+    <form method="post" asp-page-handler="AddGalleryImages" enctype="multipart/form-data" class="add-gallery-form">
+        <input asp-for="GalleryFiles" type="file" multiple accept="image/jpeg,image/png,image/webp" />
+        <button type="submit" class="btn-primary">Upload photos</button>
+    </form>
+}
+
+<h2>Colours</h2>
+<p class="hint">Optional — leave empty for a single-colour product. Each colour can have its own photo: when a customer picks the colour, the main photo changes to it.</p>
+
+@if (Model.ExistingProductId is null)
+{
+    <p class="hint">Save the product above first, then come back to add colours.</p>
+}
+else
+{
+    @if (Model.Colors.Count > 0)
+    {
+        <table class="admin-table">
+            <thead>
+                <tr>
+                    <th>Swatch</th>
+                    <th>Name</th>
+                    <th>Photo</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var color in Model.Colors)
+                {
+                    <tr>
+                        <td><span class="swatch-preview" style="--swatch-color: @color.HexCode"></span></td>
+                        <td>@color.Name</td>
+                        <td>
+                            @if (!string.IsNullOrEmpty(color.ImageUrl))
+                            {
+                                <img src="@color.ImageUrl" alt="@color.Name photo" class="color-photo-thumb" />
+                                <form method="post" asp-page-handler="RemoveColorImage" asp-route-colorId="@color.Id" class="inline-form">
+                                    <button type="submit" class="link-button-danger">Remove photo</button>
+                                </form>
+                            }
+                            else
+                            {
+                                <span class="hint">No photo</span>
+                            }
+                            <form method="post" asp-page-handler="SetColorImage" asp-route-colorId="@color.Id" enctype="multipart/form-data" class="color-photo-form">
+                                <input type="file" name="colorImage" accept="image/jpeg,image/png,image/webp" />
+                                <button type="submit" class="btn-primary">@(string.IsNullOrEmpty(color.ImageUrl) ? "Upload" : "Replace")</button>
+                            </form>
+                        </td>
+                        <td>
+                            <form method="post" asp-page-handler="DeleteColor" asp-route-colorId="@color.Id"
+                                  data-confirm="Remove this colour and its stock?">
+                                <button type="submit" class="link-button-danger">Remove colour</button>
+                            </form>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+    else
+    {
+        <p class="hint">No colours yet.</p>
+    }
+
+    <form method="post" asp-page-handler="AddColor" enctype="multipart/form-data" class="add-color-form">
+        <div>
+            <label asp-for="NewColor.Name"></label>
+            <input asp-for="NewColor.Name" type="text" placeholder="e.g. Black" />
+        </div>
+        <div>
+            <label asp-for="NewColor.HexCode"></label>
+            <input asp-for="NewColor.HexCode" type="color" />
+        </div>
+        <div>
+            <label asp-for="NewColorImage">Photo (optional)</label>
+            <input asp-for="NewColorImage" type="file" accept="image/jpeg,image/png,image/webp" />
+        </div>
+        <button type="submit" class="btn-primary">Add colour</button>
+    </form>
+
+    <h2>Stock by size</h2>
+    <p class="hint">Units on hand for each @(Model.Colors.Count > 0 ? "colour and " : "")size. A size at 0 is crossed out on the storefront and cannot be chosen.</p>
+
+    <form method="post" asp-page-handler="SaveStock">
+        <div class="table-responsive">
+            <table class="admin-table stock-grid">
+                <thead>
+                    <tr>
+                        <th>@(Model.Colors.Count > 0 ? "Colour" : "")</th>
+                        @foreach (var size in Model.Sizes)
+                        {
+                            <th>@size</th>
+                        }
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var row in Model.StockRows)
+                    {
+                        <tr>
+                            <td>
+                                @if (row.HexCode is not null)
+                                {
+                                    <span class="swatch-preview" style="--swatch-color: @row.HexCode"></span>
+                                }
+                                @row.Label
+                            </td>
+                            @foreach (var size in Model.Sizes)
+                            {
+                                <td>
+                                    <input type="number" min="0" max="100000" class="stock-input"
+                                           name="StockInputs[@(row.Key)_@(size)]" value="@row.Units[size]"
+                                           aria-label="@row.Label size @size" />
+                                </td>
+                            }
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+        <button type="submit" class="btn-primary">Save stock</button>
+    </form>
+}

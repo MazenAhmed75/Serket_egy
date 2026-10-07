@@ -1,0 +1,16 @@
+@page "/Error/{code:int?}"
+@model ECommerceStore.Web.Pages.ErrorModel
+@{
+    ViewData["Title"] = Model.Title;
+}
+
+<section class="auth-card error-card">
+    <p class="error-code">@Model.StatusCode</p>
+    <h1>@Model.Title</h1>
+    <p class="hint">@Model.Message</p>
+    <p class="error-actions"><a href="/" class="btn-primary hero-btn">Back to the home page</a></p>
+    @if (Model.StatusCode >= 500)
+    {
+        <p class="hint error-ref">If it keeps happening, tell us this reference: <code>@Model.RequestId</code></p>
+    }
+</section>

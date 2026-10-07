@@ -1,0 +1,96 @@
+@page "{orderNumber}"
+@model ECommerceStore.Web.Pages.OrderConfirmationModel
+@{
+    ViewData["Title"] = "Order confirmed";
+}
+
+@if (Model.Order is not null)
+{
+    var o = Model.Order;
+    var statusText = o.OrderStatus switch
+    {
+        OrderStatus.PendingVerification => "We're verifying your payment — you'll be notified once it's confirmed.",
+        OrderStatus.PendingPayment => "Have the total ready — you'll pay in cash when it arrives.",
+        OrderStatus.Paid => "Payment confirmed.",
+        OrderStatus.Shipped => "On its way.",
+        OrderStatus.Cancelled => "This order was cancelled.",
+        _ => string.Empty
+    };
+
+    <section class="confirmation">
+        <div class="confirmation-card">
+            <div class="confirmation-icon-wrapper">
+                <svg viewBox="0 0 24 24" width="40" height="40" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+                    <polyline points="22 4 12 14.01 9 11.01"></polyline>
+                </svg>
+            </div>
+            <h1>Thank You For Your Order!</h1>
+            <p class="order-number">Order Reference: <strong>@o.OrderNumber</strong></p>
+            <div class="status-banner">
+                <span class="status-dot"></span>
+                <span>@statusText</span>
+            </div>
+
+            <div class="confirmation-details-box">
+                <div class="details-box-header">
+                    <h3>Order Summary</h3>
+                    <span class="order-date">@o.CreatedAt.ToLocalTime().ToString("dd MMM yyyy, HH:mm")</span>
+                </div>
+                <dl class="confirmation-dl">
+                    <dt>Item</dt>
+                    <dd>
+                        <strong>@o.Quantity &times; @o.ProductName</strong>
+                        @{
+                            var details = new List<string>();
+                            if (!string.IsNullOrEmpty(o.Gender)) { details.Add(o.Gender); }
+                            if (!string.IsNullOrEmpty(o.Size)) { details.Add($"Size {o.Size}"); }
+                            if (!string.IsNullOrEmpty(o.ColorName)) { details.Add(o.ColorName); }
+                        }
+                        @if (details.Count > 0)
+                        {
+                            <span class="order-item-variants">(@string.Join(" &bull; ", details))</span>
+                        }
+                    </dd>
+
+                    @if (o.SubtotalAmount > 0)
+                    {
+                        <dt>Items</dt>
+                        <dd>@o.SubtotalAmount.ToString("N2") EGP</dd>
+
+                        @if (o.DiscountAmount > 0)
+                        {
+                            <dt>Discount</dt>
+                            <dd>-@o.DiscountAmount.ToString("N2") EGP @(string.IsNullOrEmpty(o.PromoCodeText) ? "" : $"({o.PromoCodeText})")</dd>
+                        }
+
+                        <dt>Shipping</dt>
+                        <dd>@(o.ShippingAmount <= 0 ? "Free shipping" : o.ShippingAmount.ToString("N2") + " EGP")</dd>
+                    }
+
+                    <dt>Total Amount</dt>
+                    <dd><span class="total-price-tag">@o.TotalAmount.ToString("N2") <small>EGP</small></span></dd>
+
+                    <dt>Payment Method</dt>
+                    <dd><span class="confirm-pill">@o.PaymentMethod</span></dd>
+
+                    <dt>Delivery Address</dt>
+                    <dd>
+                        @if (!string.IsNullOrEmpty(o.AddressLine))
+                        {
+                            <span>@o.AddressLine</span>
+                        }
+                        @if (!string.IsNullOrWhiteSpace(o.AddressDetail))
+                        {
+                            <br /><span>@o.AddressDetail</span>
+                        }
+                    </dd>
+                </dl>
+            </div>
+
+            <div class="confirmation-actions">
+                <a href="/" class="btn-primary btn-cta">Return to Store</a>
+            </div>
+        </div>
+    </section>
+}

@@ -1,0 +1,29 @@
+## .NET
+bin/
+obj/
+*.user
+*.suo
+.vs/
+[Dd]ebug/
+[Rr]elease/
+
+## Environment / secrets
+appsettings.Production.json
+*.env
+.env
+!.env.example
+
+## Uploaded receipts (user content, not source)
+src/ECommerceStore.Web/wwwroot/uploads/**/*
+!src/ECommerceStore.Web/wwwroot/uploads/**/.gitkeep
+
+## Rider / VS Code
+.idea/
+.vscode/
+
+## OS
+.DS_Store
+Thumbs.db
+
+# Private uploads (payment receipts) and data-protection keys: never commit
+src/ECommerceStore.Web/App_Data/

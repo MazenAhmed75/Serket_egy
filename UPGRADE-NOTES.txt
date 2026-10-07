@@ -1,0 +1,13 @@
+Cleanup + security hardening + production docs
+
+1. Extract this zip over your project (same folder structure). The zip does not contain your .env.
+2. DELETE these files (the zip can't delete them for you):
+     src/ECommerceStore.Core/Interfaces/ITelegramNotifier.cs
+     src/ECommerceStore.Infrastructure/Services/TelegramNotifier.cs
+     src/ECommerceStore.Core/Interfaces/IPaymentReceiptRepository.cs
+     src/ECommerceStore.Infrastructure/Repositories/PaymentReceiptRepository.cs
+     src/ECommerceStore.Core/DTOs/PlaceOrderDto.cs
+   Optional: remove the Telegram__BotToken / Telegram__ChatId lines from your own .env.
+3. No database migration is needed in this update.
+4. The admin must log in again once (the admin cookie was renamed).
+5. Read docs/PRODUCTION-CHECKLIST.md before deploying. Test data: scripts/cleanup-test-data.sql (dry run by default).

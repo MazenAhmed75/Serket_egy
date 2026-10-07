@@ -1,0 +1,125 @@
+@page
+@model ECommerceStore.Web.Areas.Admin.Pages.IndexModel
+@using ECommerceStore.Web.Areas.Admin.Pages
+@{
+    ViewData["Title"] = "Dashboard";
+    var summary = Model.Summary;
+}
+
+<h1>Dashboard</h1>
+
+<form method="get" class="month-filter">
+    <label for="month-select">Show</label>
+    <select id="month-select" name="month" data-autosubmit>
+        <option value="" selected="@(Model.SelectedMonth is null)">All time</option>
+        @foreach (var option in Model.MonthOptions)
+        {
+            <option value="@IndexModel.MonthKey(option)" selected="@(Model.SelectedMonth == option)">@IndexModel.FormatMonth(option)</option>
+        }
+    </select>
+    <noscript><button type="submit" class="btn-primary">Show</button></noscript>
+
+    <span class="month-shortcuts">
+        <a asp-area="Admin" asp-page="/Index" asp-route-month="@IndexModel.MonthKey(Model.ThisMonth)" class="@(Model.SelectedMonth == Model.ThisMonth ? "active" : "")">This month</a>
+        <a asp-area="Admin" asp-page="/Index" asp-route-month="@IndexModel.MonthKey(Model.LastMonth)" class="@(Model.SelectedMonth == Model.LastMonth ? "active" : "")">Last month</a>
+        <a asp-area="Admin" asp-page="/Index" class="@(Model.SelectedMonth is null ? "active" : "")">All time</a>
+    </span>
+</form>
+
+<p class="period-label">Showing: <strong>@Model.PeriodLabel</strong></p>
+
+<section class="revenue-card" aria-label="Revenue">
+    <span class="revenue-label">Revenue (paid + shipped)</span>
+    <span class="revenue-value">@summary.Revenue.ToString("N2") <small>EGP</small></span>
+    <span class="revenue-period">@Model.PeriodLabel</span>
+</section>
+
+<div class="stat-grid">
+    <div class="stat-card">
+        <span class="stat-value">@summary.TotalOrders</span>
+        <span class="stat-label">Total orders</span>
+    </div>
+    <div class="stat-card stat-card-cancelled">
+        <span class="stat-value">@summary.CancelledOrders</span>
+        <span class="stat-label">Cancelled orders</span>
+    </div>
+    @foreach (var status in new[] { OrderStatus.PendingVerification, OrderStatus.PendingPayment, OrderStatus.Shipped })
+    {
+        <div class="stat-card">
+            <span class="stat-value">@summary.StatusCounts.GetValueOrDefault(status)</span>
+            <span class="stat-label">@status</span>
+        </div>
+    }
+</div>
+
+<h2>Month by month</h2>
+
+@if (summary.Months.Count == 0)
+{
+    <p class="hint">No orders yet.</p>
+}
+else
+{
+    <div class="table-responsive">
+        <table class="admin-table">
+            <thead>
+                <tr>
+                    <th>Month</th>
+                    <th>Orders</th>
+                    <th>Cancelled</th>
+                    <th>Revenue</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var row in summary.Months)
+                {
+                    <tr class="@(Model.SelectedMonth == row.Month ? "row-selected" : "")">
+                        <td>@IndexModel.FormatMonth(row.Month)</td>
+                        <td>@row.Orders</td>
+                        <td>@row.Cancelled</td>
+                        <td>@row.Revenue.ToString("N2") EGP</td>
+                        <td><a asp-area="Admin" asp-page="/Index" asp-route-month="@IndexModel.MonthKey(row.Month)">View month</a></td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}
+
+<h2>Recent orders</h2>
+
+@if (summary.RecentOrders.Count == 0)
+{
+    <p class="hint">No orders @(Model.SelectedMonth is null ? "yet" : "in " + Model.PeriodLabel).</p>
+}
+else
+{
+    <div class="table-responsive">
+        <table class="admin-table">
+            <thead>
+                <tr>
+                    <th>Order</th>
+                    <th>Customer</th>
+                    <th>Total</th>
+                    <th>Status</th>
+                    <th>Placed</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var order in summary.RecentOrders)
+                {
+                    <tr>
+                        <td>@order.OrderNumber</td>
+                        <td>@order.Customer.FullName</td>
+                        <td>@order.TotalAmount.ToString("N2") EGP</td>
+                        <td><span class="status-badge status-@order.OrderStatus.ToString().ToLowerInvariant()">@order.OrderStatus</span></td>
+                        <td>@order.CreatedAt.ToLocalTime().ToString("dd MMM, HH:mm")</td>
+                        <td><a asp-area="Admin" asp-page="/Orders/Details" asp-route-id="@order.Id">View</a></td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}

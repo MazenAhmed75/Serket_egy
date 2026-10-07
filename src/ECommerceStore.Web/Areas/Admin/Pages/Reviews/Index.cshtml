@@ -1,0 +1,66 @@
+@page
+@model ECommerceStore.Web.Areas.Admin.Pages.Reviews.IndexModel
+@{
+    ViewData["Title"] = "Reviews";
+}
+
+<h1>Reviews</h1>
+<p class="hint">Customers must be logged in to review. A review marked "anonymous" shows no name on the site, but you can still see who wrote it here. Hide a review to take it off the site without deleting it.</p>
+
+@if (Model.StatusMessage is not null)
+{
+    <p class="status-message">@Model.StatusMessage</p>
+}
+
+@if (Model.Reviews.Count == 0)
+{
+    <p class="hint">No reviews yet.</p>
+}
+else
+{
+    <div class="table-responsive">
+        <table class="admin-table">
+            <thead>
+                <tr>
+                    <th>Date</th>
+                    <th>Product</th>
+                    <th>Rating</th>
+                    <th>Reviewer</th>
+                    <th>Review</th>
+                    <th>Status</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var review in Model.Reviews)
+                {
+                    <tr>
+                        <td>@review.CreatedAt.ToString("dd MMM yyyy")</td>
+                        <td>@review.Product.Name</td>
+                        <td>
+                            <span class="stars" style="--rating: @review.Rating" role="img" aria-label="@review.Rating out of 5 stars">&#9733;&#9733;&#9733;&#9733;&#9733;</span>
+                        </td>
+                        <td>
+                            @review.AuthorName
+                            @if (review.IsAnonymous)
+                            {
+                                <br /><span class="hint">posted anonymously</span>
+                            }
+                        </td>
+                        <td class="review-text-cell">@(string.IsNullOrWhiteSpace(review.Comment) ? "(rating only)" : review.Comment)</td>
+                        <td>@(review.IsHidden ? "Hidden" : "Visible")</td>
+                        <td class="promo-actions">
+                            <form method="post" asp-page-handler="Toggle" asp-route-id="@review.Id" class="inline-form">
+                                <button type="submit" class="link-button">@(review.IsHidden ? "Show" : "Hide")</button>
+                            </form>
+                            <form method="post" asp-page-handler="Delete" asp-route-id="@review.Id" class="inline-form"
+                                  data-confirm="Delete this review? This cannot be undone.">
+                                <button type="submit" class="link-button-danger">Delete</button>
+                            </form>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}

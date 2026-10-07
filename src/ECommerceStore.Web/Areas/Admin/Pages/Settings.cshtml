@@ -1,0 +1,27 @@
+@page
+@model ECommerceStore.Web.Areas.Admin.Pages.SettingsModel
+@{
+    ViewData["Title"] = "Settings";
+}
+
+<h1>Settings</h1>
+
+@if (Model.StatusMessage is not null)
+{
+    <p class="status-message">@Model.StatusMessage</p>
+}
+
+<section class="details-panel settings-panel">
+    <form method="post" class="checkout-form">
+        <div asp-validation-summary="All" class="validation-summary"></div>
+
+        <h2>Shipping</h2>
+        <p class="hint">This amount is added to every order at checkout. Customers with a "free shipping" promo code pay 0. Enter 0 to offer free shipping to everyone.</p>
+
+        <label asp-for="Input.ShippingFee"></label>
+        <input asp-for="Input.ShippingFee" type="number" step="0.01" min="0" />
+        <span asp-validation-for="Input.ShippingFee" class="field-error"></span>
+
+        <button type="submit" class="btn-primary">Save</button>
+    </form>
+</section>

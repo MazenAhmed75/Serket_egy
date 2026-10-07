@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>@ViewData["Title"] — Serket Admin</title>
+    <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/admin.css" asp-append-version="true" />
+    @await RenderSectionAsync("Styles", required: false)
+</head>
+<body class="admin-body">
+    <header class="admin-header">
+        <span class="admin-wordmark">Serket <em>Admin</em></span>
+
+        @if (User.Identity?.IsAuthenticated == true)
+        {
+            <nav class="admin-nav">
+                <a asp-area="Admin" asp-page="/Index">Dashboard</a>
+                <a asp-area="Admin" asp-page="/Orders/Index">Orders</a>
+                <a asp-area="Admin" asp-page="/Products/Index">Products</a>
+                <a asp-area="Admin" asp-page="/Reviews/Index">Reviews</a>
+                <a asp-area="Admin" asp-page="/Promos/Index">Promo codes</a>
+                <a asp-area="Admin" asp-page="/Settings">Settings</a>
+                <form method="post" asp-area="Admin" asp-page="/Logout" class="admin-logout-form">
+                    <button type="submit" class="link-button">Sign out</button>
+                </form>
+            </nav>
+        }
+    </header>
+
+    <main class="admin-main">
+        @RenderBody()
+    </main>
+
+    <script src="~/js/admin.js" asp-append-version="true"></script>
+    @await RenderSectionAsync("Scripts", required: false)
+</body>
+</html>
