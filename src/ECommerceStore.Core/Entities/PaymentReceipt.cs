@@ -10,8 +10,13 @@ public class PaymentReceipt
 
     public Guid OrderId { get; set; }
 
-    /// <summary>Relative path/URL of the stored screenshot (see <c>IFileStorageService</c> in Infrastructure).</summary>
+    /// <summary>
+    /// Where the screenshot is stored (see <c>IFileStorageService</c>). Empty once the image has been deleted
+    /// (by the owner, or by the automatic clean-up); the reference and verified flag are kept.
+    /// </summary>
     public string ImagePath { get; set; } = string.Empty;
+
+    public bool HasImage => !string.IsNullOrEmpty(ImagePath);
 
     public string? TransactionReference { get; set; }
 

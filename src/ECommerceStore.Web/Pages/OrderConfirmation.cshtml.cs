@@ -35,8 +35,6 @@ public class OrderConfirmationModel : PageModel
             return NotFound();
         }
 
-        var firstItem = order.OrderItems.FirstOrDefault();
-
         Order = new OrderConfirmationDto
         {
             OrderNumber = order.OrderNumber,
@@ -47,11 +45,9 @@ public class OrderConfirmationModel : PageModel
             ShippingAmount = order.ShippingAmount,
             PromoCodeText = order.PromoCodeText,
             TotalAmount = order.TotalAmount,
-            Quantity = firstItem?.Quantity ?? 0,
-            ProductName = firstItem?.Product?.Name ?? string.Empty,
-            ColorName = firstItem?.ColorName,
-            Gender = firstItem?.Gender,
-            Size = firstItem?.Size,
+            Items = order.OrderItems
+                .Select(i => new OrderConfirmationItem(i.Product?.Name ?? string.Empty, i.ColorName, i.Gender, i.Size, i.Quantity, i.UnitPrice))
+                .ToList(),
             AddressLine = order.AddressLine,
             AddressDetail = order.AddressDetail,
             CreatedAt = order.CreatedAt

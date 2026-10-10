@@ -14,4 +14,10 @@ public interface IOrderRepository : IRepository<Order>
     /// When <paramref name="orderNumberContains"/> is given, only orders whose number contains it (ignoring case) are returned.
     /// </summary>
     Task<IReadOnlyList<Order>> GetAllWithDetailsAsync(string? orderNumberContains = null);
+
+    /// <summary>
+    /// Receipts that still have an image, belonging to shipped or cancelled orders placed before
+    /// <paramref name="createdBeforeUtc"/>, oldest first. Orders that are still open are never included.
+    /// </summary>
+    Task<IReadOnlyList<PaymentReceipt>> GetReceiptsWithImagesForFinishedOrdersAsync(DateTime createdBeforeUtc, int take);
 }

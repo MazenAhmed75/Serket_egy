@@ -80,43 +80,18 @@
     </aside>
 </div>
 
-<h2>Gallery photos</h2>
-<p class="hint">Optional extra photos (back, fabric close-up, on-model). The main photo above is always shown first; these appear as thumbnails on the storefront.</p>
-
-@if (Model.ExistingProductId is null)
-{
-    <p class="hint">Save the product above first, then come back to add photos.</p>
-}
-else
-{
-    @if (Model.GalleryImages.Count > 0)
-    {
-        <div class="admin-gallery">
-            @foreach (var img in Model.GalleryImages)
-            {
-                <div class="admin-gallery-item">
-                    <img src="@img.ImageUrl" alt="Gallery photo" />
-                    <form method="post" asp-page-handler="DeleteGalleryImage" asp-route-imageId="@img.Id"
-                          data-confirm="Remove this photo?">
-                        <button type="submit" class="link-button-danger">Remove</button>
-                    </form>
-                </div>
-            }
-        </div>
-    }
-    else
-    {
-        <p class="hint">No extra photos yet.</p>
-    }
-
-    <form method="post" asp-page-handler="AddGalleryImages" enctype="multipart/form-data" class="add-gallery-form">
-        <input asp-for="GalleryFiles" type="file" multiple accept="image/jpeg,image/png,image/webp" />
-        <button type="submit" class="btn-primary">Upload photos</button>
-    </form>
-}
-
 <h2>Colours</h2>
-<p class="hint">Optional — leave empty for a single-colour product. Each colour can have its own photo: when a customer picks the colour, the main photo changes to it.</p>
+<p class="hint">Add each colour of this fabric. A colour has a <strong>main photo</strong> and its own <strong>gallery</strong>: when a customer picks the colour, the page shows that colour's photos. A product with a single colour still needs that colour (it is chosen automatically).</p>
+
+@if (Model.LegacyGalleryCount > 0)
+{
+    <div class="legacy-notice">
+        <p class="hint">This product still has @Model.LegacyGalleryCount old general gallery photo(s). They are no longer shown on the site. Add them to a colour's gallery below if you still want them, then remove the old ones.</p>
+        <form method="post" asp-page-handler="RemoveLegacyGallery" data-confirm="Remove the old general gallery photos? This cannot be undone.">
+            <button type="submit" class="link-button-danger">Remove the old photos</button>
+        </form>
+    </div>
+}
 
 @if (Model.ExistingProductId is null)
 {
@@ -131,7 +106,7 @@ else
                 <tr>
                     <th>Swatch</th>
                     <th>Name</th>
-                    <th>Photo</th>
+                    <th>Main photo</th>
                     <th></th>
                 </tr>
             </thead>
@@ -160,8 +135,33 @@ else
                         </td>
                         <td>
                             <form method="post" asp-page-handler="DeleteColor" asp-route-colorId="@color.Id"
-                                  data-confirm="Remove this colour and its stock?">
+                                  data-confirm="Remove this colour, its gallery and its stock?">
                                 <button type="submit" class="link-button-danger">Remove colour</button>
+                            </form>
+                        </td>
+                    </tr>
+                    <tr class="color-gallery-row">
+                        <td colspan="4">
+                            <strong>@color.Name gallery</strong>
+                            <span class="hint">Extra photos shown under the main photo when this colour is chosen.</span>
+                            @if (Model.GalleryOf(color.Id).Any())
+                            {
+                                <div class="admin-gallery">
+                                    @foreach (var img in Model.GalleryOf(color.Id))
+                                    {
+                                        <div class="admin-gallery-item">
+                                            <img src="@img.ImageUrl" alt="@color.Name gallery photo" />
+                                            <form method="post" asp-page-handler="DeleteGalleryImage" asp-route-imageId="@img.Id"
+                                                  data-confirm="Remove this photo?">
+                                                <button type="submit" class="link-button-danger">Remove</button>
+                                            </form>
+                                        </div>
+                                    }
+                                </div>
+                            }
+                            <form method="post" asp-page-handler="AddColorGallery" asp-route-colorId="@color.Id" enctype="multipart/form-data" class="add-gallery-form">
+                                <input type="file" name="galleryFiles" multiple accept="image/jpeg,image/png,image/webp" />
+                                <button type="submit" class="btn-primary">Upload gallery photos</button>
                             </form>
                         </td>
                     </tr>

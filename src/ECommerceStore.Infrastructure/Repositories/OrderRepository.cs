@@ -28,6 +28,15 @@ public class OrderRepository : Repository<Order>, IOrderRepository
             .Include(o => o.PaymentReceipts)
             .FirstOrDefaultAsync(o => o.Id == orderId);
 
+    public async Task<IReadOnlyList<PaymentReceipt>> GetReceiptsWithImagesForFinishedOrdersAsync(DateTime createdBeforeUtc, int take) =>
+        await Context.PaymentReceipts
+            .Where(r => r.ImagePath != string.Empty
+                        && r.Order.CreatedAt < createdBeforeUtc
+                        && (r.Order.OrderStatus == OrderStatus.Shipped || r.Order.OrderStatus == OrderStatus.Cancelled))
+            .OrderBy(r => r.UploadedAt)
+            .Take(take)
+            .ToListAsync();
+
     public async Task<IReadOnlyList<Order>> GetAllWithDetailsAsync(string? orderNumberContains = null)
     {
         var query = DbSet

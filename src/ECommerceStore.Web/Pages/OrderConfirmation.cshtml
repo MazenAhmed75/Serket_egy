@@ -38,18 +38,21 @@
                     <span class="order-date">@o.CreatedAt.ToLocalTime().ToString("dd MMM yyyy, HH:mm")</span>
                 </div>
                 <dl class="confirmation-dl">
-                    <dt>Item</dt>
+                    <dt>@(o.Items.Count == 1 ? "Item" : "Items")</dt>
                     <dd>
-                        <strong>@o.Quantity &times; @o.ProductName</strong>
-                        @{
-                            var details = new List<string>();
-                            if (!string.IsNullOrEmpty(o.Gender)) { details.Add(o.Gender); }
-                            if (!string.IsNullOrEmpty(o.Size)) { details.Add($"Size {o.Size}"); }
-                            if (!string.IsNullOrEmpty(o.ColorName)) { details.Add(o.ColorName); }
-                        }
-                        @if (details.Count > 0)
+                        @foreach (var item in o.Items)
                         {
-                            <span class="order-item-variants">(@string.Join(" &bull; ", details))</span>
+                            var details = new List<string>();
+                            if (!string.IsNullOrEmpty(item.Gender)) { details.Add(item.Gender == "Female" ? "Women's fit" : "Men's fit"); }
+                            if (!string.IsNullOrEmpty(item.Size)) { details.Add($"Size {item.Size}"); }
+                            if (!string.IsNullOrEmpty(item.ColorName)) { details.Add(item.ColorName); }
+                            <div class="order-item-line">
+                                <strong>@item.Quantity &times; @item.ProductName</strong>
+                                @if (details.Count > 0)
+                                {
+                                    <span class="order-item-variants">(@string.Join(" &bull; ", details))</span>
+                                }
+                            </div>
                         }
                     </dd>
 

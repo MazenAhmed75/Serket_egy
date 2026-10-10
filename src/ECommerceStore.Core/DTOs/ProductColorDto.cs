@@ -11,6 +11,9 @@ public class ProductColorDto
     /// <summary>Photo of the set in this colour (null when the owner has not added one).</summary>
     public string? ImageUrl { get; set; }
 
+    /// <summary>Every photo shown for this colour, in order: its main photo first, then its gallery.</summary>
+    public IReadOnlyList<string> Photos { get; set; } = Array.Empty<string>();
+
     /// <summary>Units on hand per size (every size in <see cref="Constants.ProductSizes.All"/> is present).</summary>
     public IReadOnlyDictionary<string, int> Stock { get; set; } = new Dictionary<string, int>();
 

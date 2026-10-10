@@ -121,15 +121,54 @@ builder.Services.AddRateLimiter(options =>
 // OrderItems, PaymentReceipts) so every use case commits through one DbContext/transaction.
 builder.Services.AddScoped<IUnitOfWork, UnitOfWork>();
 builder.Services.AddScoped<PromoCodeService>();
+builder.Services.AddScoped<CartService>();
+builder.Services.AddSingleton<CartStore>();
+
+// E-mails are handed to a background sender so a slow mail server can never hold up (or break) a customer's order.
+builder.Services.AddSingleton<ChannelEmailQueue>();
+builder.Services.AddSingleton<IEmailQueue>(services => services.GetRequiredService<ChannelEmailQueue>());
+builder.Services.AddHostedService<EmailQueueWorker>();
 builder.Services.AddScoped<ReviewService>();
 builder.Services.AddScoped<StockReminderService>();
 
-// Product photos are public (wwwroot/uploads). Payment receipts are private: they live outside the web root and are
-// only shown through the admin-only receipt page. Storage:PrivatePath can point somewhere else (a mounted volume).
-var privateFilesPath = builder.Configuration["Storage:PrivatePath"]
-    ?? Path.Combine(builder.Environment.ContentRootPath, "App_Data", "private");
-builder.Services.AddSingleton<IFileStorageService>(
-    _ => new LocalFileStorageService(builder.Environment.WebRootPath, privateFilesPath));
+// Where uploaded files live. Storage:Provider is "Local" (disk, the default: fine for development) or "Supabase"
+// (cloud storage: use this on hosts whose disk is erased on every restart, such as Render without a persistent disk).
+// Product photos are public; payment receipts are always private and only shown through the admin-only receipt page.
+var storageProvider = builder.Configuration["Storage:Provider"] ?? "Local";
+string? supabaseImageHost = null;
+
+if (storageProvider.Equals("Supabase", StringComparison.OrdinalIgnoreCase))
+{
+    var supabase = builder.Configuration.GetSection("Supabase").Get<SupabaseStorageOptions>() ?? new SupabaseStorageOptions();
+    if (supabase.Validate() is { } problem)
+    {
+        throw new InvalidOperationException($"Storage:Provider is Supabase but the settings are incomplete. {problem}");
+    }
+
+    supabaseImageHost = new Uri(supabase.Url).Host;
+    builder.Services.AddSingleton(supabase);
+    builder.Services.AddHttpClient<IFileStorageService, SupabaseFileStorageService>(client => client.Timeout = TimeSpan.FromSeconds(30));
+}
+else if (storageProvider.Equals("Local", StringComparison.OrdinalIgnoreCase))
+{
+    // Storage:PrivatePath can point somewhere else (a mounted volume).
+    var privateFilesPath = builder.Configuration["Storage:PrivatePath"]
+        ?? Path.Combine(builder.Environment.ContentRootPath, "App_Data", "private");
+    builder.Services.AddSingleton<IFileStorageService>(
+        _ => new LocalFileStorageService(builder.Environment.WebRootPath, privateFilesPath));
+}
+else
+{
+    throw new InvalidOperationException($"Storage:Provider must be \"Local\" or \"Supabase\" (it is \"{storageProvider}\").");
+}
+
+builder.Services.AddScoped<FileCleanup>();
+builder.Services.AddScoped<ReceiptCleaner>();
+builder.Services.AddHostedService<ReceiptCleanupWorker>();
+
+// Product photos kept in Supabase are shown from the project's address, so the page's security policy must allow it.
+var imageSources = "'self' data: blob: https://*.tile.openstreetmap.org https://tile.openstreetmap.org"
+    + (supabaseImageHost is null ? string.Empty : $" https://{supabaseImageHost}");
 
 builder.Services.AddSingleton<OrderConfirmationLinks>();
 builder.Services.AddScoped<IEmailNotifier, SmtpEmailNotifier>();
@@ -204,7 +243,7 @@ app.Use(async (context, next) =>
         "script-src 'self'; " +
         "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; " +
         "font-src 'self' https://fonts.gstatic.com; " +
-        "img-src 'self' data: blob: https://*.tile.openstreetmap.org https://tile.openstreetmap.org; " +
+        $"img-src {imageSources}; " +
         "connect-src 'self' https://nominatim.openstreetmap.org; " +
         "object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'");
     await next();

@@ -1,5 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using ECommerceStore.Core.Entities;
+using ECommerceStore.Core.Exceptions;
 using ECommerceStore.Core.Interfaces;
 using ECommerceStore.Core.Services;
 using ECommerceStore.Web.Services;
@@ -13,11 +14,13 @@ public class IndexModel : PageModel
 {
     private readonly IUnitOfWork _unitOfWork;
     private readonly IFileStorageService _fileStorageService;
+    private readonly FileCleanup _fileCleanup;
 
-    public IndexModel(IUnitOfWork unitOfWork, IFileStorageService fileStorageService)
+    public IndexModel(IUnitOfWork unitOfWork, IFileStorageService fileStorageService, FileCleanup fileCleanup)
     {
         _unitOfWork = unitOfWork;
         _fileStorageService = fileStorageService;
+        _fileCleanup = fileCleanup;
     }
 
     [BindProperty]
@@ -53,8 +56,17 @@ public class IndexModel : PageModel
         var imageUrl = StarterCatalog.PlaceholderImage;
         if (hasImage)
         {
-            await using var stream = Input.ImageFile!.OpenReadStream();
-            imageUrl = await _fileStorageService.SaveAsync(stream, Input.ImageFile.FileName, "products");
+            try
+            {
+                await using var stream = Input.ImageFile!.OpenReadStream();
+                imageUrl = await _fileStorageService.SaveAsync(stream, Input.ImageFile.FileName, "products");
+            }
+            catch (FileStorageException)
+            {
+                ModelState.AddModelError("Input.ImageFile", "The photo could not be uploaded right now. Nothing was saved; please try again.");
+                await LoadAsync();
+                return Page();
+            }
         }
 
         var slug = await Slugger.MakeUniqueAsync(Input.Name, s => _unitOfWork.Products.SlugExistsAsync(s));
@@ -123,7 +135,7 @@ public class IndexModel : PageModel
 
     public async Task<IActionResult> OnPostDeleteAsync(Guid id)
     {
-        var product = await _unitOfWork.Products.GetByIdAsync(id);
+        var product = await _unitOfWork.Products.GetWithColorsAsync(id);
         if (product is null)
         {
             return RedirectToPage();
@@ -136,8 +148,15 @@ public class IndexModel : PageModel
             return RedirectToPage();
         }
 
+        // Remember every photo before the rows disappear, then delete the files once the product is gone.
+        var photos = product.Images.Select(i => i.ImageUrl)
+            .Concat(product.Colors.Select(c => c.ImageUrl))
+            .Append(product.ImageUrl)
+            .ToArray();
+
         _unitOfWork.Products.Remove(product);
         await _unitOfWork.SaveChangesAsync();
+        await _fileCleanup.DeleteQuietlyAsync(photos);
 
         StatusMessage = $"\"{product.Name}\" deleted.";
         return RedirectToPage();

@@ -2,46 +2,64 @@ using System.ComponentModel.DataAnnotations;
 using ECommerceStore.Core.Constants;
 using ECommerceStore.Core.Entities;
 using ECommerceStore.Core.Enums;
+using ECommerceStore.Core.Exceptions;
 using ECommerceStore.Core.Interfaces;
 using ECommerceStore.Core.Services;
 using ECommerceStore.Web.Services;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.RateLimiting;
+using Microsoft.EntityFrameworkCore;
 
 namespace ECommerceStore.Web.Pages;
 
+/// <summary>
+/// Checkout for everything in the cart. The cart only remembers what was chosen; prices and stock are read from the
+/// database again here, and the order is saved together with the stock change in one transaction.
+/// </summary>
 [EnableRateLimiting("shopping")]
 public class CheckoutModel : PageModel
 {
     private readonly IUnitOfWork _unitOfWork;
     private readonly IFileStorageService _fileStorageService;
-    private readonly IEmailNotifier _emailNotifier;
+    private readonly IEmailQueue _emailQueue;
     private readonly IConfiguration _configuration;
     private readonly PromoCodeService _promoCodeService;
     private readonly OrderConfirmationLinks _confirmationLinks;
+    private readonly FileCleanup _fileCleanup;
+    private readonly CartStore _cartStore;
+    private readonly CartService _cartService;
+    private readonly ILogger<CheckoutModel> _logger;
 
     public CheckoutModel(
         IUnitOfWork unitOfWork,
         IFileStorageService fileStorageService,
-        IEmailNotifier emailNotifier,
+        IEmailQueue emailQueue,
         IConfiguration configuration,
         PromoCodeService promoCodeService,
-        OrderConfirmationLinks confirmationLinks)
+        OrderConfirmationLinks confirmationLinks,
+        FileCleanup fileCleanup,
+        CartStore cartStore,
+        CartService cartService,
+        ILogger<CheckoutModel> logger)
     {
         _unitOfWork = unitOfWork;
         _fileStorageService = fileStorageService;
-        _emailNotifier = emailNotifier;
+        _emailQueue = emailQueue;
         _configuration = configuration;
         _promoCodeService = promoCodeService;
         _confirmationLinks = confirmationLinks;
+        _fileCleanup = fileCleanup;
+        _cartStore = cartStore;
+        _cartService = cartService;
+        _logger = logger;
     }
 
     [BindProperty]
     public CheckoutInputModel Input { get; set; } = new();
 
-    public Product? Product { get; private set; }
+    /// <summary>The cart's lines, priced from the database.</summary>
+    public CartSummary Summary { get; private set; } = new(Array.Empty<CartItemView>());
 
     /// <summary>Items / discount / shipping / total shown in the order box.</summary>
     public PriceBreakdown Pricing { get; private set; } = new(0, 0, 0, 0, 0, false, null);
@@ -49,21 +67,8 @@ public class CheckoutModel : PageModel
     /// <summary>True when a shopper is logged in (promo codes need an account; details are pre-filled).</summary>
     public bool IsLoggedIn => HttpContext.GetCustomerId() is not null;
 
-    /// <summary>The colour chosen on the product page (null when the product has no colours).</summary>
-    public Core.Entities.ProductColor? SelectedColor =>
-        Input.ProductColorId.HasValue
-            ? Product?.Colors.FirstOrDefault(c => c.Id == Input.ProductColorId.Value)
-            : null;
-
-    /// <summary>Query string that sends the customer back to the product page with their choices intact.</summary>
-    public string ChangeSelectionUrl =>
-        $"/product/{Product?.Slug}?gender={Input.Gender}&size={Input.Size}&quantity={Input.Quantity}" +
-        (Input.ProductColorId.HasValue ? $"&colorId={Input.ProductColorId}" : string.Empty);
-
-    /// <summary>This page's own address, used as the return address after logging in.</summary>
-    public string CheckoutUrl =>
-        $"/Checkout?productId={Input.ProductId}&quantity={Input.Quantity}&gender={Input.Gender}&size={Input.Size}" +
-        (Input.ProductColorId.HasValue ? $"&colorId={Input.ProductColorId}" : string.Empty);
+    /// <summary>Where to come back to after logging in or signing up.</summary>
+    public string CheckoutUrl => "/Checkout";
 
     /// <summary>The governorates offered in the delivery drop-down.</summary>
     public IReadOnlyList<string> Governorates => EgyptGovernorates.All;
@@ -72,48 +77,16 @@ public class CheckoutModel : PageModel
 
     public string InstaPayHandle => _configuration["Payment:InstaPayHandle"] ?? string.Empty;
 
-    public async Task<IActionResult> OnGetAsync(Guid productId, int quantity = 1, Guid? colorId = null, string? gender = null, string? size = null)
+    public async Task<IActionResult> OnGetAsync()
     {
-        Product = await _unitOfWork.Products.GetWithColorsAsync(productId);
-
-        if (Product is null || !Product.IsActive)
+        var summary = await _cartService.BuildAsync(_cartStore.Read(HttpContext));
+        if (summary.IsEmpty || summary.HasProblems)
         {
-            return RedirectToPage("/Index");
+            // Nothing to buy, or something in the cart changed: the cart page explains what.
+            return RedirectToPage("/Cart");
         }
 
-        Input.ProductId = Product.Id;
-        // Validate against allowlists — reject anything that isn't a known value.
-        Input.Gender = ProductGenders.IsValid(gender) ? gender! : ProductGenders.Default;
-        Input.Size = ProductSizes.IsValid(size) ? size! : ProductSizes.Default;
-
-        var activeColors = Product.Colors.Where(c => c.IsActive).ToList();
-        Core.Entities.ProductColor? selectedColor = null;
-
-        if (activeColors.Count > 0)
-        {
-            selectedColor = colorId.HasValue
-                ? activeColors.FirstOrDefault(c => c.Id == colorId.Value)
-                : null;
-
-            // Checkout only confirms a choice made on the product page. If the colour is
-            // missing or unknown, send the customer back to choose one.
-            if (selectedColor is null)
-            {
-                return RedirectToPage("/Product", new { slug = Product.Slug });
-            }
-
-            Input.ProductColorId = selectedColor.Id;
-        }
-
-        // The chosen size must be in stock for the chosen colour; otherwise go back and pick again.
-        var available = Product.UnitsAvailable(selectedColor?.Id, Input.Size);
-        if (available <= 0)
-        {
-            return RedirectToPage("/Product", new { slug = Product.Slug, gender = Input.Gender, size = Input.Size, colorId = selectedColor?.Id });
-        }
-
-        Input.Quantity = Math.Clamp(quantity, 1, available);
-
+        Summary = summary;
         await LoadPricingAsync(null);
         await PrefillFromAccountAsync();
 
@@ -121,15 +94,13 @@ public class CheckoutModel : PageModel
     }
 
     /// <summary>Called by the "Apply" button on the promo box (fetch). Returns the price lines for the page to show.</summary>
-    public async Task<IActionResult> OnPostApplyPromoAsync(Guid productId, int quantity, string? promoCode)
+    public async Task<IActionResult> OnPostApplyPromoAsync(string? promoCode)
     {
-        var product = await _unitOfWork.Products.GetWithColorsAsync(productId);
-        if (product is null || !product.IsActive)
+        var summary = await _cartService.BuildAsync(_cartStore.Read(HttpContext));
+        if (summary.IsEmpty)
         {
             return BadRequest();
         }
-
-        quantity = Math.Clamp(quantity, 1, 1000);
 
         PromoValidationResult? result = null;
         if (!string.IsNullOrWhiteSpace(promoCode))
@@ -138,7 +109,7 @@ public class CheckoutModel : PageModel
         }
 
         var settings = await _unitOfWork.Settings.GetCurrentAsync();
-        var pricing = PricingCalculator.Calculate(product.CurrentPrice, quantity, settings.ShippingFee, result?.Promo);
+        var pricing = PricingCalculator.Calculate(summary.Subtotal, settings.ShippingFee, result?.Promo);
 
         var message = result switch
         {
@@ -165,58 +136,13 @@ public class CheckoutModel : PageModel
 
     public async Task<IActionResult> OnPostAsync()
     {
-        Product = await _unitOfWork.Products.GetWithColorsAsync(Input.ProductId);
-
-        if (Product is null || !Product.IsActive)
+        var summary = await _cartService.BuildAsync(_cartStore.Read(HttpContext));
+        if (summary.IsEmpty || summary.HasProblems)
         {
-            ModelState.AddModelError(string.Empty, "This product is no longer available.");
-            return Page();
+            return RedirectToPage("/Cart");
         }
 
-        var activeColors = Product.Colors.Where(c => c.IsActive).ToList();
-        Core.Entities.ProductColor? selectedColor = null;
-        var colourOk = true;
-
-        if (activeColors.Count > 0)
-        {
-            selectedColor = Input.ProductColorId.HasValue
-                ? activeColors.FirstOrDefault(c => c.Id == Input.ProductColorId.Value)
-                : null;
-
-            if (selectedColor is null)
-            {
-                colourOk = false;
-                ModelState.AddModelError(nameof(Input.ProductColorId), "Please choose a colour.");
-            }
-        }
-
-        if (!ProductGenders.IsValid(Input.Gender))
-        {
-            ModelState.AddModelError(nameof(Input.Gender), "Invalid gender selection.");
-        }
-
-        var sizeOk = ProductSizes.IsValid(Input.Size);
-        if (!sizeOk)
-        {
-            ModelState.AddModelError(nameof(Input.Size), "Invalid size selection.");
-        }
-
-        // Friendly pre-check of stock (tracked per colour and size). The atomic deduction further down is what
-        // really prevents overselling when two customers order at the same moment.
-        if (colourOk && sizeOk)
-        {
-            var available = Product.UnitsAvailable(selectedColor?.Id, Input.Size);
-            var what = selectedColor is null ? $"size {Input.Size}" : $"size {Input.Size} in {selectedColor.Name}";
-
-            if (available <= 0)
-            {
-                ModelState.AddModelError(nameof(Input.Size), $"Sorry, {what} is sold out. Please go back and choose another.");
-            }
-            else if (Input.Quantity > available)
-            {
-                ModelState.AddModelError(nameof(Input.Quantity), $"Only {available} left in {what}.");
-            }
-        }
+        Summary = summary;
 
         if (!string.IsNullOrEmpty(Input.Governorate) && !EgyptGovernorates.IsValid(Input.Governorate))
         {
@@ -241,7 +167,7 @@ public class CheckoutModel : PageModel
             }
         }
 
-        // Promo code: always re-checked here — the browser's "Apply" result is never trusted.
+        // Promo code: always re-checked here; the browser's "Apply" result is never trusted.
         var customerId = HttpContext.GetCustomerId();
         PromoCode? promo = null;
         if (!string.IsNullOrWhiteSpace(Input.PromoCode))
@@ -266,14 +192,18 @@ public class CheckoutModel : PageModel
             return Page();
         }
 
-        // From here on, the stock change, the customer, the order and the promo use are saved together or not at all.
+        // From here on, the stock changes, the customer, the order and the promo use are saved together or not at all.
         await using var transaction = await _unitOfWork.BeginTransactionAsync();
 
-        // Take the units out in one atomic step that only works if enough are left.
-        if (!await _unitOfWork.Products.TryDeductStockAsync(Product.Id, selectedColor?.Id, Input.Size, Input.Quantity))
+        // Take the units out one line at a time, each in one atomic step that only works if enough are left.
+        foreach (var item in summary.Items)
         {
-            ModelState.AddModelError(string.Empty, "Sorry, the last units of this item were just bought. Please go back and choose another size or colour.");
-            return Page();
+            if (!await _unitOfWork.Products.TryDeductStockAsync(item.Line.ProductId, item.Line.ColorId, item.Line.Size, item.Line.Quantity))
+            {
+                // Someone else just bought it. Leaving here rolls back the lines already taken.
+                TempData["CartNotice"] = $"Sorry, the last units of {item.ProductName} (size {item.Line.Size}) were just bought. Please review your cart.";
+                return RedirectToPage("/Cart");
+            }
         }
 
         // Who is ordering: the logged-in account, or a brand-new guest record. Guests are never matched to an
@@ -302,54 +232,39 @@ public class CheckoutModel : PageModel
             await _unitOfWork.Customers.AddAsync(customer);
         }
 
-        var unitPrice = Product.CurrentPrice;
+        var order = OrderBuilder.Build(
+            summary,
+            customer,
+            Pricing,
+            Input.PaymentMethod,
+            new OrderDelivery(
+                Input.Governorate,
+                Input.Area,
+                Input.Street,
+                Input.BuildingNumber,
+                Input.AddressDetail ?? string.Empty,
+                Input.Latitude,
+                Input.Longitude));
 
-        var order = new Order
-        {
-            Id = Guid.NewGuid(),
-            OrderNumber = GenerateOrderNumber(),
-            CustomerId = customer.Id,
-            Customer = customer,
-            SubtotalAmount = Pricing.Subtotal,
-            DiscountAmount = Pricing.Discount,
-            ShippingAmount = Pricing.Shipping,
-            PromoCodeText = promo?.Code,
-            TotalAmount = Pricing.Total,
-            PaymentMethod = Input.PaymentMethod,
-            OrderStatus = requiresReceipt ? OrderStatus.PendingVerification : OrderStatus.PendingPayment,
-            Latitude = Input.Latitude,
-            Longitude = Input.Longitude,
-            Governorate = Input.Governorate,
-            Area = Input.Area.Trim(),
-            Street = Input.Street.Trim(),
-            BuildingNumber = Input.BuildingNumber.Trim(),
-            AddressDetail = Input.AddressDetail?.Trim() ?? string.Empty,
-            CreatedAt = DateTime.UtcNow,
-            OrderItems = new List<OrderItem>
-            {
-                new()
-                {
-                    Id = Guid.NewGuid(),
-                    ProductId = Product.Id,
-                    Quantity = Input.Quantity,
-                    UnitPrice = unitPrice,
-                    ProductColorId = selectedColor?.Id,
-                    ColorName = selectedColor?.Name,
-                    Gender = Input.Gender,
-                    Size = Input.Size
-                }
-            }
-        };
-
+        string? savedReceiptPath = null;
         if (requiresReceipt && Input.ReceiptFile is not null)
         {
-            await using var stream = Input.ReceiptFile.OpenReadStream();
-            var savedPath = await _fileStorageService.SavePrivateAsync(stream, Input.ReceiptFile.FileName, "receipts");
+            try
+            {
+                await using var stream = Input.ReceiptFile.OpenReadStream();
+                savedReceiptPath = await _fileStorageService.SavePrivateAsync(stream, Input.ReceiptFile.FileName, "receipts");
+            }
+            catch (FileStorageException)
+            {
+                // Nothing has been saved yet: leaving here rolls the transaction back, so no order and no stock change.
+                ModelState.AddModelError(nameof(Input.ReceiptFile), "We couldn't upload your receipt right now. Nothing was ordered. Please choose the screenshot again and retry in a moment.");
+                return Page();
+            }
 
             order.PaymentReceipts.Add(new PaymentReceipt
             {
                 Id = Guid.NewGuid(),
-                ImagePath = savedPath,
+                ImagePath = savedReceiptPath,
                 TransactionReference = Input.TransactionReference,
                 UploadedAt = DateTime.UtcNow,
                 IsVerified = false
@@ -376,10 +291,11 @@ public class CheckoutModel : PageModel
         }
         catch (DbUpdateException) when (promo is not null)
         {
-            // The database allows each account one use per code; this only happens if the same
-            // account used the code in another tab a moment ago. PostgreSQL refuses further commands in a
-            // failed transaction, so it is rolled back (which also puts the stock back) before querying again.
+            // The database allows each account one use per code; this only happens if the same account used the
+            // code in another tab a moment ago. PostgreSQL refuses further commands in a failed transaction, so it is
+            // rolled back (which also puts the stock back) before querying again.
             await transaction.RollbackAsync();
+            await _fileCleanup.DeleteQuietlyAsync(savedReceiptPath);
             ModelState.AddModelError(string.Empty, "This promo code was just used and can't be applied again. Please review your total and try again.");
             Input.PromoCode = null;
             ModelState.Remove("Input.PromoCode");
@@ -389,45 +305,46 @@ public class CheckoutModel : PageModel
 
         await transaction.CommitAsync();
 
-        var variantParts = new List<string>();
-        if (!string.IsNullOrEmpty(Input.Gender)) variantParts.Add(Input.Gender);
-        if (!string.IsNullOrEmpty(Input.Size)) variantParts.Add(Input.Size);
-        if (selectedColor is not null) variantParts.Add(selectedColor.Name);
-
-        var variantDesc = variantParts.Count > 0 ? $" ({string.Join(", ", variantParts)})" : "";
-        var itemDescription = $"{Input.Quantity} x {Product.Name}{variantDesc}";
-
-        await _emailNotifier.SendOrderNotificationAsync(
-            $"New order {order.OrderNumber}",
-            $"Customer: {Input.CustomerFullName} ({Input.CustomerPhoneNumber})\n" +
-            $"Item: {itemDescription}\n" +
-            $"Items: {Pricing.Subtotal:N2} EGP\n" +
-            (Pricing.Discount > 0 ? $"Discount: -{Pricing.Discount:N2} EGP\n" : "") +
-            $"Shipping: {Pricing.Shipping:N2} EGP\n" +
-            $"Total: {Pricing.Total:N2} EGP\n" +
-            (promo is null ? "" : $"Promo code: {promo.Code} ({PromoSummary(Pricing)})\n") +
-            $"Payment method: {Input.PaymentMethod}\n" +
-            $"Delivery: {order.AddressLine}" + (string.IsNullOrEmpty(order.AddressDetail) ? "" : $" - {order.AddressDetail}") + "\n" +
-            $"Map: https://www.openstreetmap.org/?mlat={Input.Latitude}&mlon={Input.Longitude}#map=17/{Input.Latitude}/{Input.Longitude}\n" +
-            $"Order status: {order.OrderStatus}");
-
-        // Receipt to the customer (their account e-mail, or the optional e-mail typed at checkout).
-        var receiptEmail = customer.Email ?? Input.CustomerEmail;
-        if (!string.IsNullOrWhiteSpace(receiptEmail))
-        {
-            await _emailNotifier.SendToCustomerAsync(
-                receiptEmail,
-                OrderReceiptFormatter.Subject(order),
-                OrderReceiptFormatter.Body(order, Product.Name));
-        }
+        // The order is saved. Nothing below may stop the customer from reaching the confirmation page.
+        _cartStore.Clear(HttpContext);
+        QueueNotifications(order, summary, customer);
 
         return RedirectToPage("/OrderConfirmation", new { t = _confirmationLinks.CreateToken(order.OrderNumber) });
+    }
+
+    /// <summary>Hands the owner alert and the customer's receipt to the background sender (never throws).</summary>
+    private void QueueNotifications(Order order, CartSummary summary, Customer customer)
+    {
+        try
+        {
+            var names = summary.Items
+                .GroupBy(i => i.Line.ProductId)
+                .ToDictionary(g => g.Key, g => g.First().ProductName);
+
+            _emailQueue.Enqueue(new EmailMessage(
+                null,
+                OrderReceiptFormatter.OwnerSubject(order),
+                OrderReceiptFormatter.OwnerBody(order, names, Input.CustomerPhoneNumber)));
+
+            var receiptEmail = customer.Email ?? Input.CustomerEmail;
+            if (!string.IsNullOrWhiteSpace(receiptEmail))
+            {
+                _emailQueue.Enqueue(new EmailMessage(
+                    receiptEmail,
+                    OrderReceiptFormatter.Subject(order),
+                    OrderReceiptFormatter.Body(order, names)));
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Order {OrderNumber} was saved but its e-mails could not be queued.", order.OrderNumber);
+        }
     }
 
     private async Task LoadPricingAsync(PromoCode? promo)
     {
         var settings = await _unitOfWork.Settings.GetCurrentAsync();
-        Pricing = PricingCalculator.Calculate(Product!.CurrentPrice, Input.Quantity, settings.ShippingFee, promo);
+        Pricing = PricingCalculator.Calculate(Summary.Subtotal, settings.ShippingFee, promo);
     }
 
     /// <summary>Logged-in shoppers get their name, phone and e-mail filled in. The delivery address is always typed fresh.</summary>
@@ -468,30 +385,8 @@ public class CheckoutModel : PageModel
         return summary.Length == 0 ? "Promo code applied." : $"Promo code applied: {summary}.";
     }
 
-    private static string GenerateOrderNumber() =>
-        $"ORD-{DateTime.UtcNow:yyyyMMdd}-{Guid.NewGuid().ToString("N")[..6].ToUpperInvariant()}";
-
     public class CheckoutInputModel
     {
-        [Required]
-        public Guid ProductId { get; set; }
-
-        [Range(1, 1000)]
-        public int Quantity { get; set; } = 1;
-
-        [Display(Name = "Colour")]
-        public Guid? ProductColorId { get; set; }
-
-        [Required(ErrorMessage = "Please select gender.")]
-        [StringLength(20)]
-        [Display(Name = "Gender")]
-        public string Gender { get; set; } = "Male";
-
-        [Required(ErrorMessage = "Please select a size.")]
-        [StringLength(20)]
-        [Display(Name = "Size")]
-        public string Size { get; set; } = ProductSizes.Default;
-
         [Required(ErrorMessage = "Full name is required.")]
         [StringLength(150)]
         [Display(Name = "Full name")]

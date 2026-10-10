@@ -1,24 +1,17 @@
-using System.Text.RegularExpressions;
+using ECommerceStore.Core.Exceptions;
 using ECommerceStore.Core.Interfaces;
+using ECommerceStore.Core.Services;
 
 namespace ECommerceStore.Infrastructure.Services;
 
 /// <summary>
-/// Saves uploaded files to disk. Public images go under wwwroot/uploads/{subFolder} (served as static files);
-/// private images (payment receipts) go under a folder outside the web root. File names are always generated
-/// and the extension is limited to a safe image type, so an upload can never be saved as, say, a web page or script.
-/// Swap this for a cloud-storage implementation (S3/Azure Blob) later without touching any calling code.
+/// Saves uploaded files to disk (used for development, or when no cloud storage is configured). Public images go
+/// under wwwroot/uploads/{subFolder}; private images (payment receipts) go under a folder outside the web root.
+/// File names are generated and only a safe image extension is kept, so an upload can never be saved as, say, a web page.
+/// Note: on hosts whose disk is erased on every restart (such as Render without a persistent disk) use Supabase storage instead.
 /// </summary>
 public class LocalFileStorageService : IFileStorageService
 {
-    private const string PrivatePrefix = "private:";
-
-    private static readonly HashSet<string> SafeExtensions = new(StringComparer.OrdinalIgnoreCase) { ".jpg", ".jpeg", ".png", ".webp" };
-
-    // "private:receipts/<32 hex characters>.<jpg|jpeg|png|webp>"; nothing else is ever opened.
-    private static readonly Regex PrivateReferencePattern =
-        new(@"^private:(?<folder>[a-z]{1,30})/(?<file>[0-9a-f]{32}\.(jpg|jpeg|png|webp))$", RegexOptions.Compiled | RegexOptions.CultureInvariant);
-
     private readonly string _webRootPath;
     private readonly string _privateRootPath;
 
@@ -28,56 +21,78 @@ public class LocalFileStorageService : IFileStorageService
         _privateRootPath = privateRootPath;
     }
 
-    public async Task<string> SaveAsync(
-        Stream content,
-        string originalFileName,
-        string subFolder,
-        CancellationToken cancellationToken = default)
+    public async Task<string> SaveAsync(Stream content, string originalFileName, string subFolder, CancellationToken cancellationToken = default)
     {
-        var fileName = NewFileName(originalFileName);
+        var fileName = StoredFileNames.NewFileName(originalFileName);
         await WriteAsync(Path.Combine(_webRootPath, "uploads", subFolder), fileName, content, cancellationToken);
         return $"/uploads/{subFolder}/{fileName}";
     }
 
-    public async Task<string> SavePrivateAsync(
-        Stream content,
-        string originalFileName,
-        string subFolder,
-        CancellationToken cancellationToken = default)
+    public async Task<string> SavePrivateAsync(Stream content, string originalFileName, string subFolder, CancellationToken cancellationToken = default)
     {
-        var fileName = NewFileName(originalFileName);
+        var fileName = StoredFileNames.NewFileName(originalFileName);
         await WriteAsync(Path.Combine(_privateRootPath, subFolder), fileName, content, cancellationToken);
-        return $"{PrivatePrefix}{subFolder}/{fileName}";
+        return $"{StoredFileNames.PrivatePrefix}{subFolder}/{fileName}";
     }
 
-    public Stream? OpenPrivate(string reference)
+    public Task<Stream?> OpenPrivateAsync(string reference, CancellationToken cancellationToken = default)
     {
-        var match = PrivateReferencePattern.Match(reference ?? string.Empty);
-        if (!match.Success)
+        if (!StoredFileNames.TryParsePrivate(reference, out var folder, out var file))
         {
-            return null;
+            return Task.FromResult<Stream?>(null);
         }
 
-        var fullPath = Path.Combine(_privateRootPath, match.Groups["folder"].Value, match.Groups["file"].Value);
-        return File.Exists(fullPath) ? new FileStream(fullPath, FileMode.Open, FileAccess.Read, FileShare.Read) : null;
+        var fullPath = Path.Combine(_privateRootPath, folder, file);
+        Stream? stream = File.Exists(fullPath) ? new FileStream(fullPath, FileMode.Open, FileAccess.Read, FileShare.Read) : null;
+        return Task.FromResult(stream);
     }
 
-    private static string NewFileName(string originalFileName)
+    public Task DeleteAsync(string? reference, CancellationToken cancellationToken = default)
     {
-        var extension = Path.GetExtension(originalFileName).ToLowerInvariant();
-        if (!SafeExtensions.Contains(extension))
+        string? fullPath = null;
+
+        if (StoredFileNames.TryParsePrivate(reference, out var privateFolder, out var privateFile))
         {
-            extension = ".jpg";
+            fullPath = Path.Combine(_privateRootPath, privateFolder, privateFile);
+        }
+        else if (reference is not null && reference.StartsWith("/uploads/", StringComparison.Ordinal) &&
+                 StoredFileNames.TryParsePublicObject(reference["/uploads/".Length..], out var folder, out var file))
+        {
+            fullPath = Path.Combine(_webRootPath, "uploads", folder, file);
         }
 
-        return $"{Guid.NewGuid():N}{extension}";
+        // Anything that is not one of our generated files (starter photos, other paths) is left alone.
+        if (fullPath is not null)
+        {
+            try
+            {
+                File.Delete(fullPath); // a file that is already gone is not an error
+            }
+            catch (IOException ex)
+            {
+                throw new FileStorageException("The file could not be deleted.", ex);
+            }
+            catch (UnauthorizedAccessException ex)
+            {
+                throw new FileStorageException("The file could not be deleted.", ex);
+            }
+        }
+
+        return Task.CompletedTask;
     }
 
     private static async Task WriteAsync(string folderPath, string fileName, Stream content, CancellationToken cancellationToken)
     {
-        Directory.CreateDirectory(folderPath);
+        try
+        {
+            Directory.CreateDirectory(folderPath);
 
-        await using var fileStream = new FileStream(Path.Combine(folderPath, fileName), FileMode.CreateNew, FileAccess.Write);
-        await content.CopyToAsync(fileStream, cancellationToken);
+            await using var fileStream = new FileStream(Path.Combine(folderPath, fileName), FileMode.CreateNew, FileAccess.Write);
+            await content.CopyToAsync(fileStream, cancellationToken);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            throw new FileStorageException("The file could not be saved.", ex);
+        }
     }
 }

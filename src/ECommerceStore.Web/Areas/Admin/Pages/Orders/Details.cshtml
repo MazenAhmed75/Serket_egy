@@ -1,6 +1,7 @@
 @page "{id:guid}"
 @model ECommerceStore.Web.Areas.Admin.Pages.Orders.DetailsModel
 @using ECommerceStore.Core.Services
+@using ECommerceStore.Core.Enums
 @{
     ViewData["Title"] = Model.Order is null ? "Order" : $"Order {Model.Order.OrderNumber}";
 }
@@ -16,7 +17,6 @@
 else
 {
     var o = Model.Order;
-    var firstItem = o.OrderItems.FirstOrDefault();
 
     <a asp-area="Admin" asp-page="/Orders/Index" class="back-link">&larr; All orders</a>
     <h1>Order @o.OrderNumber</h1>
@@ -36,23 +36,17 @@ else
                 <dt>Email</dt><dd>@(o.Customer.Email ?? "—")</dd>
             </dl>
 
-            <h2>Item</h2>
+            <h2>@(o.OrderItems.Count == 1 ? "Item" : "Items")</h2>
             <dl class="admin-dl">
-                <dt>Product</dt><dd>@(firstItem?.Product.Name ?? "—")</dd>
-                @if (!string.IsNullOrEmpty(firstItem?.Gender))
+                @foreach (var item in o.OrderItems)
                 {
-                    <dt>Gender</dt><dd>@firstItem.Gender</dd>
+                    var parts = new List<string>();
+                    if (!string.IsNullOrEmpty(item.Gender)) parts.Add(item.Gender);
+                    if (!string.IsNullOrEmpty(item.Size)) parts.Add($"Size {item.Size}");
+                    if (!string.IsNullOrEmpty(item.ColorName)) parts.Add(item.ColorName);
+                    <dt>@item.Product.Name</dt>
+                    <dd>@item.Quantity x @item.UnitPrice.ToString("N2") EGP@(parts.Count > 0 ? $" ({string.Join(", ", parts)})" : "")</dd>
                 }
-                @if (!string.IsNullOrEmpty(firstItem?.Size))
-                {
-                    <dt>Size</dt><dd>@firstItem.Size</dd>
-                }
-                @if (!string.IsNullOrEmpty(firstItem?.ColorName))
-                {
-                    <dt>Colour</dt><dd>@firstItem.ColorName</dd>
-                }
-                <dt>Quantity</dt><dd>@(firstItem?.Quantity ?? 0)</dd>
-                <dt>Unit price</dt><dd>@(firstItem?.UnitPrice.ToString("N2") ?? "—") EGP</dd>
                 @if (o.SubtotalAmount > 0)
                 {
                     <dt>Items</dt><dd>@o.SubtotalAmount.ToString("N2") EGP</dd>
@@ -98,14 +92,28 @@ else
                     @foreach (var receipt in o.PaymentReceipts.OrderByDescending(r => r.UploadedAt))
                     {
                         <div class="receipt-card">
-                            <a asp-page="/Orders/Receipt" asp-route-id="@receipt.Id" target="_blank" rel="noopener">
-                                <img src="@Url.Page("/Orders/Receipt", new { id = receipt.Id })" alt="Payment receipt" />
-                            </a>
+                            @if (receipt.HasImage)
+                            {
+                                <a asp-page="/Orders/Receipt" asp-route-id="@receipt.Id" target="_blank" rel="noopener">
+                                    <img src="@Url.Page("/Orders/Receipt", new { id = receipt.Id })" alt="Payment receipt" />
+                                </a>
+                            }
+                            else
+                            {
+                                <p class="hint receipt-deleted">Receipt image deleted.</p>
+                            }
                             <dl class="admin-dl">
                                 <dt>Uploaded</dt><dd>@receipt.UploadedAt.ToLocalTime().ToString("dd MMM yyyy, HH:mm")</dd>
                                 <dt>Reference</dt><dd>@(receipt.TransactionReference ?? "—")</dd>
                                 <dt>Verified</dt><dd>@(receipt.IsVerified ? "Yes" : "No")</dd>
                             </dl>
+                            @if (receipt.HasImage)
+                            {
+                                <form method="post" asp-page-handler="DeleteReceipt" asp-route-id="@o.Id" asp-route-receiptId="@receipt.Id"
+                                      data-confirm="@(receipt.IsVerified || o.OrderStatus is OrderStatus.Shipped or OrderStatus.Cancelled ? "Delete this receipt image? This cannot be undone." : "This payment has NOT been verified yet. Delete the receipt image anyway? This cannot be undone.")">
+                                    <button type="submit" class="link-button-danger">Delete image</button>
+                                </form>
+                            }
                         </div>
                     }
                 </div>

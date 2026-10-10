@@ -15,6 +15,9 @@ namespace ECommerceStore.Infrastructure.Services;
 /// </summary>
 public class SmtpEmailNotifier : IEmailNotifier
 {
+    // Connecting, logging in and sending must all finish within this time, or the message is given up on (and logged).
+    private static readonly TimeSpan SendTimeout = TimeSpan.FromSeconds(20);
+
     private readonly IConfiguration _configuration;
     private readonly ILogger<SmtpEmailNotifier> _logger;
 
@@ -55,6 +58,11 @@ public class SmtpEmailNotifier : IEmailNotifier
         var fromAddress = _configuration["Email:FromAddress"] ?? username ?? toAddress;
         var fromName = _configuration["Email:FromName"] ?? "Serket Store";
 
+        // A mail server that doesn't answer (some hosts block outgoing mail ports) must not hold anything up for minutes.
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        timeout.CancelAfter(SendTimeout);
+        cancellationToken = timeout.Token;
+
         try
         {
             var message = new MimeMessage();
@@ -63,7 +71,7 @@ public class SmtpEmailNotifier : IEmailNotifier
             message.Subject = subject;
             message.Body = new TextPart("plain") { Text = body };
 
-            using var client = new SmtpClient();
+            using var client = new SmtpClient { Timeout = (int)SendTimeout.TotalMilliseconds };
             var socketOptions = useSsl ? SecureSocketOptions.StartTls : SecureSocketOptions.Auto;
 
             await client.ConnectAsync(host, port, socketOptions, cancellationToken);
@@ -79,7 +87,7 @@ public class SmtpEmailNotifier : IEmailNotifier
         }
         catch (Exception ex)
         {
-            // An e-mail failure must never break order placement or stock updates.
+            // An e-mail failure (including a timeout) must never break order placement or stock updates.
             _logger.LogError(ex, "Failed to send email to {Recipient}.", toAddress);
             return false;
         }

@@ -19,5 +19,9 @@ public class StoreSettingsConfiguration : IEntityTypeConfiguration<StoreSettings
         builder.Property(s => s.ShippingFee)
             .IsRequired()
             .HasColumnType("decimal(18,2)");
+
+        builder.Property(s => s.ReceiptRetentionDays)
+            .IsRequired()
+            .HasDefaultValue(StoreSettings.DefaultReceiptRetentionDays);
     }
 }

@@ -15,11 +15,11 @@ public sealed record PriceBreakdown(
 public static class PricingCalculator
 {
     /// <summary>
-    /// Items subtotal, minus the promo's percentage (if any), plus shipping (0 when the promo gives free shipping).
+    /// The items subtotal (the sum of every cart line), minus the promo's percentage (if any), plus shipping
+    /// (0 when the promo gives free shipping).
     /// </summary>
-    public static PriceBreakdown Calculate(decimal unitPrice, int quantity, decimal shippingFee, PromoCode? promo)
+    public static PriceBreakdown Calculate(decimal subtotal, decimal shippingFee, PromoCode? promo)
     {
-        var subtotal = unitPrice * quantity;
 
         var percent = promo?.PercentOff is > 0 and <= 100 ? promo.PercentOff!.Value : 0;
         var discount = percent > 0

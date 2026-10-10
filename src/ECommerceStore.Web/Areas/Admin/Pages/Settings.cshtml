@@ -22,6 +22,19 @@
         <input asp-for="Input.ShippingFee" type="number" step="0.01" min="0" />
         <span asp-validation-for="Input.ShippingFee" class="field-error"></span>
 
+        <h2>Receipt images</h2>
+        <p class="hint">Payment screenshots are deleted automatically once an order has been shipped or cancelled and is this many days old. Orders that are still waiting for payment or shipping are never touched. Enter 0 to keep them forever.</p>
+
+        <label asp-for="Input.ReceiptRetentionDays"></label>
+        <input asp-for="Input.ReceiptRetentionDays" type="number" min="0" max="3650" />
+        <span asp-validation-for="Input.ReceiptRetentionDays" class="field-error"></span>
+
         <button type="submit" class="btn-primary">Save</button>
+    </form>
+
+    <h2>Free up storage</h2>
+    <p class="hint">Deletes the receipt images of <strong>all</strong> shipped and cancelled orders right now, however recent. The orders and their payment records stay; only the screenshots go. Use this if your storage is getting full.</p>
+    <form method="post" asp-page-handler="CleanReceiptsNow" data-confirm="Delete the receipt images of ALL shipped and cancelled orders now? This cannot be undone.">
+        <button type="submit" class="btn-danger">Delete receipt images of finished orders</button>
     </form>
 </section>

@@ -20,15 +20,7 @@ public class OrderConfirmationDto
 
     public decimal TotalAmount { get; set; }
 
-    public int Quantity { get; set; }
-
-    public string ProductName { get; set; } = string.Empty;
-
-    public string? ColorName { get; set; }
-
-    public string? Gender { get; set; }
-
-    public string? Size { get; set; }
+    public IReadOnlyList<OrderConfirmationItem> Items { get; set; } = Array.Empty<OrderConfirmationItem>();
 
     /// <summary>The address on one line (building and street, area, governorate).</summary>
     public string AddressLine { get; set; } = string.Empty;
@@ -38,3 +30,6 @@ public class OrderConfirmationDto
 
     public DateTime CreatedAt { get; set; }
 }
+
+/// <summary>One item of a placed order, as shown on the confirmation page.</summary>
+public sealed record OrderConfirmationItem(string ProductName, string? ColorName, string? Gender, string? Size, int Quantity, decimal UnitPrice);

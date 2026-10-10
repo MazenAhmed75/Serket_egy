@@ -8,72 +8,68 @@
     <link rel="stylesheet" href="~/lib/leaflet/leaflet.css" />
 }
 
-@if (Model.Product is null)
-{
-    <p>Redirecting…</p>
-}
-else
-{
-    var p = Model.Product;
-    var summaryImage = !string.IsNullOrEmpty(Model.SelectedColor?.ImageUrl) ? Model.SelectedColor!.ImageUrl : p.ImageUrl;
+@{
     var pr = Model.Pricing;
-    <section class="checkout">
-        <div class="checkout-header-area">
-            <a href="@Model.ChangeSelectionUrl" class="back-link">&larr; Back to product</a>
-            <h1>Express Checkout</h1>
-            <div class="checkout-steps-bar">
-                <span class="step-indicator active"><span class="step-num">1</span> Order Details</span>
-                <span class="step-sep">&rsaquo;</span>
-                <span class="step-indicator active"><span class="step-num">2</span> Delivery Pin</span>
-                <span class="step-sep">&rsaquo;</span>
-                <span class="step-indicator active"><span class="step-num">3</span> Payment</span>
-            </div>
+}
+
+<section class="checkout">
+    <div class="checkout-header-area">
+        <a asp-page="/Cart" class="back-link">&larr; Back to cart</a>
+        <h1>Express Checkout</h1>
+        <div class="checkout-steps-bar">
+            <span class="step-indicator active"><span class="step-num">1</span> Order Details</span>
+            <span class="step-sep">&rsaquo;</span>
+            <span class="step-indicator active"><span class="step-num">2</span> Delivery Pin</span>
+            <span class="step-sep">&rsaquo;</span>
+            <span class="step-indicator active"><span class="step-num">3</span> Payment</span>
+        </div>
+    </div>
+
+    <div class="summary-card summary-card-cart">
+        <div class="summary-items">
+            <span class="summary-kicker">Your order</span>
+            @foreach (var item in Model.Summary.Items)
+            {
+                <div class="summary-item">
+                    <div class="summary-item-img"><img src="@item.ImageUrl" alt="@item.ProductName" /></div>
+                    <div class="summary-item-info">
+                        <strong>@item.ProductName</strong>
+                        <div class="selection-chips">
+                            <span class="selection-chip">@(item.Line.Gender == "Female" ? "Women's Fit" : "Men's Fit")</span>
+                            <span class="selection-chip">Size @item.Line.Size</span>
+                            @if (item.ColorName is not null)
+                            {
+                                <span class="selection-chip"><span class="chip-swatch" style="--swatch-color: @item.ColorHex"></span>@item.ColorName</span>
+                            }
+                            <span class="selection-chip">Qty @item.Line.Quantity</span>
+                        </div>
+                    </div>
+                    <span class="summary-item-total">@item.LineTotal.ToString("N2") EGP</span>
+                </div>
+            }
+            <a asp-page="/Cart" class="change-selection">Edit cart</a>
         </div>
 
-        <div class="summary-card">
-            <div class="summary-img-box">
-                <img src="@summaryImage" alt="@p.Name" />
+        <!-- Price in three parts: items, shipping, total (plus a discount line when a promo code takes a percentage off). -->
+        <div class="price-breakdown" id="priceBreakdown">
+            <div class="price-line">
+                <span>Items (@Model.Summary.ItemCount)</span>
+                <span id="pb-subtotal">@CheckoutModel.Money(pr.Subtotal)</span>
             </div>
-            <div class="summary-details">
-                <span class="summary-kicker">Order Item</span>
-                <h2>@p.Name</h2>
-                <div class="summary-meta">
-                    <span class="quality-badge"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg> In Stock &amp; Ready to Ship</span>
-                </div>
-                <div class="selection-chips">
-                    <span class="selection-chip">@(Model.Input.Gender == "Female" ? "Women's Fit" : "Men's Fit")</span>
-                    <span class="selection-chip">Size @Model.Input.Size</span>
-                    @if (Model.SelectedColor is not null)
-                    {
-                        <span class="selection-chip">
-                            <span class="chip-swatch" style="--swatch-color: @Model.SelectedColor.HexCode"></span>@Model.SelectedColor.Name
-                        </span>
-                    }
-                    <span class="selection-chip">Qty @Model.Input.Quantity</span>
-                    <a href="@Model.ChangeSelectionUrl" class="change-selection">Change</a>
-                </div>
+            <div class="price-line price-line-discount" id="pb-discount-row" hidden="@(pr.Discount <= 0)">
+                <span>Discount (<span id="pb-promo-label">@pr.PromoCode @(pr.PercentOff > 0 ? $"- {pr.PercentOff}%" : "")</span>)</span>
+                <span id="pb-discount">-@CheckoutModel.Money(pr.Discount)</span>
             </div>
-
-            <!-- Price in three parts: items, shipping, total (plus a discount line when a promo code takes a percentage off). -->
-            <div class="price-breakdown" id="priceBreakdown">
-                <div class="price-line">
-                    <span>Items (@Model.Input.Quantity &times; @p.CurrentPrice.ToString("N2") EGP@(p.HasDiscount ? $", {p.DiscountPercent}% off" : ""))</span>
-                    <span id="pb-subtotal">@CheckoutModel.Money(pr.Subtotal)</span>
-                </div>
-                <div class="price-line price-line-discount" id="pb-discount-row" hidden="@(pr.Discount <= 0)">
-                    <span>Discount (<span id="pb-promo-label">@pr.PromoCode @(pr.PercentOff > 0 ? $"- {pr.PercentOff}%" : "")</span>)</span>
-                    <span id="pb-discount">-@CheckoutModel.Money(pr.Discount)</span>
-                </div>
-                <div class="price-line">
-                    <span>Shipping</span>
-                    <span id="pb-shipping" class="@(pr.Shipping <= 0 ? "free" : "")">@CheckoutModel.ShippingText(pr.Shipping)</span>
-                </div>
-                <div class="price-line price-line-total">
-                    <span>Total</span>
-                    <span id="pb-total">@CheckoutModel.Money(pr.Total)</span>
-                </div>
+            <div class="price-line">
+                <span>Shipping</span>
+                <span id="pb-shipping" class="@(pr.Shipping <= 0 ? "free" : "")">@CheckoutModel.ShippingText(pr.Shipping)</span>
+            </div>
+            <div class="price-line price-line-total">
+                <span>Total</span>
+                <span id="pb-total">@CheckoutModel.Money(pr.Total)</span>
             </div>
         </div>
+    </div>
 
         <!-- Promo code box (needs a logged-in account: each code can be used once per account) -->
         <div class="promo-card" id="promoCard">
@@ -96,7 +92,6 @@ else
         </div>
 
         <form method="post" enctype="multipart/form-data" class="checkout-form">
-            <input asp-for="Input.ProductId" type="hidden" />
             <input asp-for="Input.PromoCode" type="hidden" />
 
             <div asp-validation-summary="All" class="validation-summary"></div>
@@ -122,14 +117,6 @@ else
                     <input asp-for="Input.CustomerEmail" type="email" autocomplete="email" />
                 }
                 <span asp-validation-for="Input.CustomerEmail" class="field-error"></span>
-
-                @* Gender, size, colour and quantity are chosen on the product page; checkout only confirms them. *@
-                <input asp-for="Input.Gender" type="hidden" />
-                <input asp-for="Input.Size" type="hidden" />
-                <input asp-for="Input.ProductColorId" type="hidden" />
-                <input asp-for="Input.Quantity" type="hidden" />
-                <span asp-validation-for="Input.Quantity" class="field-error"></span>
-                <span asp-validation-for="Input.ProductColorId" class="field-error"></span>
             </fieldset>
 
             <fieldset>
@@ -255,8 +242,7 @@ else
                 </div>
             </div>
         </form>
-    </section>
-}
+</section>
 
 @section Scripts {
     <script src="~/lib/leaflet/leaflet.js"></script>

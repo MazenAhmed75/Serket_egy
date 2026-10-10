@@ -1,5 +1,5 @@
-// Product page options: size availability per colour, colour photos, size-chart switching and
-// the quantity limit. Stock numbers come from the JSON block rendered by the page
+// Product page options: size availability per colour, the photos of the chosen colour (main photo + its own gallery),
+// size-chart switching and the quantity limit. Stock and photo lists come from the JSON block rendered by the page
 // (<script type="application/json" id="stock-data">), so there is no extra request.
 document.addEventListener('DOMContentLoaded', function () {
     var form = document.querySelector('.order-form');
@@ -21,11 +21,11 @@ document.addEventListener('DOMContentLoaded', function () {
     var sizeInputs = form.querySelectorAll('input[name="size"]');
     var genderInputs = form.querySelectorAll('input[name="gender"]');
     var qtyInput = form.querySelector('input[name="quantity"]');
-    var submitButton = form.querySelector('button[type="submit"]');
+    var submitButtons = form.querySelectorAll('button[type="submit"]');
     var stockNote = document.getElementById('stockNote');
     var stockNoteText = stockNote ? stockNote.querySelector('[data-role="stock-note-text"]') : null;
     var mainImage = document.getElementById('mainProductImage');
-    var thumbs = document.querySelectorAll('.gallery-thumb');
+    var thumbsEl = document.getElementById('galleryThumbs');
     var defaultImage = mainImage ? mainImage.getAttribute('src') : null;
 
     function selectedColorId() {
@@ -84,7 +84,7 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     }
 
-    function updateQuantityAndButton() {
+    function updateQuantityAndButtons() {
         var size = selectedSize();
         var units = size ? unitsFor(size) : 0;
 
@@ -107,31 +107,68 @@ document.addEventListener('DOMContentLoaded', function () {
             }
         }
 
-        if (submitButton) {
-            var colourOk = !data.hasColors || !!selectedColorId();
-            submitButton.disabled = !(size && units > 0 && colourOk);
+        var colourOk = !data.hasColors || !!selectedColorId();
+        var canBuy = !!(size && units > 0 && colourOk);
+        submitButtons.forEach(function (button) {
+            button.disabled = !canBuy;
+        });
+    }
+
+    // ---- photos: the chosen colour's main photo and its own gallery -----------------------------------------
+    function showPhoto(src, thumb) {
+        if (mainImage && src && mainImage.getAttribute('src') !== src) {
+            mainImage.setAttribute('src', src);
+        }
+        if (thumbsEl) {
+            thumbsEl.querySelectorAll('.gallery-thumb').forEach(function (t) {
+                t.classList.toggle('active', t === thumb);
+            });
         }
     }
 
-    // Show the photo of the set in the chosen colour (falls back to the main product photo).
-    function updateImage() {
+    function renderPhotos(photos) {
         if (!mainImage) {
             return;
         }
 
-        var color = data.hasColors ? data.colors[selectedColorId()] : null;
-        var src = color && color.image ? color.image : defaultImage;
-        if (src && mainImage.getAttribute('src') !== src) {
-            mainImage.setAttribute('src', src);
+        var list = photos && photos.length ? photos : (defaultImage ? [defaultImage] : []);
+        showPhoto(list[0], null);
+
+        if (!thumbsEl) {
+            return;
         }
 
-        var showingDefault = !(color && color.image);
-        thumbs.forEach(function (thumb, index) {
-            thumb.classList.toggle('active', showingDefault && index === 0);
+        thumbsEl.textContent = '';
+        thumbsEl.hidden = list.length < 2;
+        if (list.length < 2) {
+            return;
+        }
+
+        list.forEach(function (src, index) {
+            var button = document.createElement('button');
+            button.type = 'button';
+            button.className = 'gallery-thumb' + (index === 0 ? ' active' : '');
+            button.setAttribute('aria-label', 'Show photo ' + (index + 1) + ' of ' + list.length);
+
+            var img = document.createElement('img');
+            img.src = src;
+            img.alt = '';
+            img.loading = 'lazy';
+            button.appendChild(img);
+
+            button.addEventListener('click', function () {
+                showPhoto(src, button);
+            });
+            thumbsEl.appendChild(button);
         });
     }
 
-    function selectSwatch(swatch) {
+    function updatePhotos() {
+        var color = data.hasColors ? data.colors[selectedColorId()] : null;
+        renderPhotos(color ? color.photos : null);
+    }
+
+    function selectSwatch(swatch, userClicked) {
         swatches.forEach(function (s) { s.classList.remove('selected'); });
         swatch.classList.add('selected');
 
@@ -143,9 +180,14 @@ document.addEventListener('DOMContentLoaded', function () {
             statusEl.classList.add('selected');
         }
 
+        // Choosing another colour starts again from one item.
+        if (userClicked && qtyInput) {
+            qtyInput.value = 1;
+        }
+
         refreshSizes();
-        updateQuantityAndButton();
-        updateImage();
+        updateQuantityAndButtons();
+        updatePhotos();
     }
 
     swatches.forEach(function (swatch) {
@@ -153,12 +195,12 @@ document.addEventListener('DOMContentLoaded', function () {
             if (swatch.classList.contains('out-of-stock')) {
                 return;
             }
-            selectSwatch(swatch);
+            selectSwatch(swatch, true);
         });
     });
 
     sizeInputs.forEach(function (input) {
-        input.addEventListener('change', updateQuantityAndButton);
+        input.addEventListener('change', updateQuantityAndButtons);
     });
 
     // Men's / Women's fit: show the matching size chart.
@@ -180,13 +222,14 @@ document.addEventListener('DOMContentLoaded', function () {
         : null;
 
     if (preselected && !preselected.classList.contains('out-of-stock')) {
-        selectSwatch(preselected);
+        selectSwatch(preselected, false);
     } else {
         if (colorInput) {
             colorInput.value = '';
         }
         refreshSizes();
-        updateQuantityAndButton();
+        updateQuantityAndButtons();
+        updatePhotos();
     }
 
     showChartForGender();

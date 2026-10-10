@@ -17,12 +17,14 @@ public class ProductModel : PageModel
     private readonly IUnitOfWork _unitOfWork;
     private readonly ReviewService _reviewService;
     private readonly StockReminderService _stockReminderService;
+    private readonly CartStore _cartStore;
 
-    public ProductModel(IUnitOfWork unitOfWork, ReviewService reviewService, StockReminderService stockReminderService)
+    public ProductModel(IUnitOfWork unitOfWork, ReviewService reviewService, StockReminderService stockReminderService, CartStore cartStore)
     {
         _unitOfWork = unitOfWork;
         _reviewService = reviewService;
         _stockReminderService = stockReminderService;
+        _cartStore = cartStore;
     }
 
     public ProductDisplayDto Product { get; private set; } = null!;
@@ -50,6 +52,10 @@ public class ProductModel : PageModel
 
     /// <summary>Where to send the shopper back to after logging in or signing up.</summary>
     public string PageUrl => $"/product/{Product.Slug}";
+
+    /// <summary>Why the last "add to cart" didn't work (for example "only 2 left").</summary>
+    [TempData]
+    public string? CartNotice { get; set; }
 
     [TempData]
     public string? ReviewMessage { get; set; }
@@ -100,10 +106,63 @@ public class ProductModel : PageModel
             none = Product.DefaultStock,
             colors = Product.Colors.ToDictionary(
                 c => c.Id.ToString(),
-                c => new { name = c.Name, stock = c.Stock, image = c.ImageUrl })
+                c => new { name = c.Name, stock = c.Stock, image = c.ImageUrl, photos = c.Photos })
         });
 
         return Page();
+    }
+
+    /// <summary>Adds the chosen colour/size/fit and quantity to the cart, then goes to the cart (or straight to checkout for "Buy now").</summary>
+    public async Task<IActionResult> OnPostAddToCartAsync(string slug, string? gender, string? size, Guid? colorId, int quantity, string? action)
+    {
+        var product = await _unitOfWork.Products.GetActiveBySlugAsync(slug);
+        if (product is null)
+        {
+            return NotFound();
+        }
+
+        IActionResult Back(string message)
+        {
+            CartNotice = message;
+            return Redirect($"/product/{product.Slug}");
+        }
+
+        if (!ProductGenders.IsValid(gender) || !ProductSizes.IsValid(size) || quantity < 1)
+        {
+            return Back("Please choose your fit, size and quantity.");
+        }
+
+        var activeColors = product.Colors.Where(c => c.IsActive).ToList();
+        var color = activeColors.FirstOrDefault(c => c.Id == colorId);
+        if (activeColors.Count > 0 && color is null)
+        {
+            return Back("Please choose a colour.");
+        }
+
+        var line = new CartLine(product.Id, color?.Id, size!, gender!, quantity);
+        var cart = _cartStore.Read(HttpContext);
+
+        var available = product.UnitsAvailable(color?.Id, size!);
+        var alreadyInCart = cart.QuantityOf(line.Key);
+        if (available <= 0)
+        {
+            return Back("Sorry, that size is sold out.");
+        }
+
+        if (alreadyInCart + quantity > available)
+        {
+            return Back(alreadyInCart > 0
+                ? $"You already have {alreadyInCart} in your cart and only {available} are available."
+                : $"Only {available} available in that size.");
+        }
+
+        if (!cart.TryAdd(line, out var updated))
+        {
+            return Back($"Your cart is full ({Cart.MaxLines} different items). Please check out or remove something first.");
+        }
+
+        _cartStore.Write(HttpContext, updated);
+        return RedirectToPage(action == "buy" ? "/Checkout" : "/Cart");
     }
 
     /// <summary>"Remind me when it's back": saves the e-mail for one sold-out colour and size. Returns JSON for the page script.</summary>
@@ -164,10 +223,6 @@ public class ProductModel : PageModel
             Rating = summaries.TryGetValue(product.Id, out var summary) ? summary : RatingSummary.None,
             Reviews = reviews.Select(r => new ReviewDto(r.PublicName, r.Rating, r.Comment, r.CreatedAt)).ToList(),
             ImageUrl = product.ImageUrl,
-            GalleryImages = new[] { product.ImageUrl }
-                .Concat(product.Images.OrderBy(i => i.SortOrder).Select(i => i.ImageUrl))
-                .Where(u => !string.IsNullOrWhiteSpace(u))
-                .ToList(),
             DefaultStock = product.UnitsBySize(null),
             Colors = product.Colors
                 .Where(c => c.IsActive)
@@ -178,6 +233,12 @@ public class ProductModel : PageModel
                     Name = c.Name,
                     HexCode = c.HexCode,
                     ImageUrl = c.ImageUrl,
+                    // The colour's own photo first, then its gallery: this is what the page shows when the colour is chosen.
+                    Photos = new[] { c.ImageUrl }
+                        .Concat(product.Images.Where(i => i.ProductColorId == c.Id).OrderBy(i => i.SortOrder).Select(i => i.ImageUrl))
+                        .Where(u => !string.IsNullOrWhiteSpace(u))
+                        .Select(u => u!)
+                        .ToList(),
                     Stock = product.UnitsBySize(c.Id)
                 })
                 .ToList()

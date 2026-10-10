@@ -52,24 +52,26 @@ else
         <tbody>
             @foreach (var order in Model.Orders)
             {
-                var firstItem = order.OrderItems.FirstOrDefault();
                 <tr>
                     <td>@order.OrderNumber</td>
                     <td>@order.Customer.FullName</td>
                     <td>@order.Customer.PhoneNumber</td>
                     <td>
-                        @if (firstItem is null)
+                        @if (order.OrderItems.Count == 0)
                         {
                             <span>—</span>
                         }
                         else
                         {
-                            var parts = new List<string>();
-                            if (!string.IsNullOrEmpty(firstItem.Gender)) parts.Add(firstItem.Gender);
-                            if (!string.IsNullOrEmpty(firstItem.Size)) parts.Add(firstItem.Size);
-                            if (!string.IsNullOrEmpty(firstItem.ColorName)) parts.Add(firstItem.ColorName);
-                            var suffix = parts.Count > 0 ? $" ({string.Join(", ", parts)})" : "";
-                            <span>@firstItem.Quantity x @firstItem.Product.Name@suffix</span>
+                            @foreach (var item in order.OrderItems)
+                            {
+                                var parts = new List<string>();
+                                if (!string.IsNullOrEmpty(item.Gender)) parts.Add(item.Gender);
+                                if (!string.IsNullOrEmpty(item.Size)) parts.Add(item.Size);
+                                if (!string.IsNullOrEmpty(item.ColorName)) parts.Add(item.ColorName);
+                                var suffix = parts.Count > 0 ? $" ({string.Join(", ", parts)})" : "";
+                                <div>@item.Quantity x @item.Product.Name@suffix</div>
+                            }
                         }
                     </td>
                     <td>@order.TotalAmount.ToString("N2") EGP</td>

@@ -26,6 +26,12 @@ public class ProductRepository : Repository<Product>, IProductRepository
             .ThenBy(p => p.Name)
             .ToListAsync();
 
+    public async Task<IReadOnlyList<Product>> GetActiveByIdsAsync(IReadOnlyCollection<Guid> ids) =>
+        await WithDetails()
+            .AsNoTracking()
+            .Where(p => p.IsActive && ids.Contains(p.Id))
+            .ToListAsync();
+
     public async Task<Product?> GetActiveBySlugAsync(string slug) =>
         await WithDetails().AsNoTracking().FirstOrDefaultAsync(p => p.IsActive && p.Slug == slug);
 

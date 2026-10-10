@@ -352,6 +352,9 @@ namespace ECommerceStore.Infrastructure.Migrations
                         .HasMaxLength(500)
                         .HasColumnType("character varying(500)");
 
+                    b.Property<Guid?>("ProductColorId")
+                        .HasColumnType("uuid");
+
                     b.Property<Guid>("ProductId")
                         .HasColumnType("uuid");
 
@@ -361,6 +364,8 @@ namespace ECommerceStore.Infrastructure.Migrations
                         .HasDefaultValue(0);
 
                     b.HasKey("Id");
+
+                    b.HasIndex("ProductColorId");
 
                     b.HasIndex("ProductId");
 
@@ -556,6 +561,11 @@ namespace ECommerceStore.Infrastructure.Migrations
                     b.Property<int>("Id")
                         .HasColumnType("integer");
 
+                    b.Property<int>("ReceiptRetentionDays")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(60);
+
                     b.Property<decimal>("ShippingFee")
                         .HasColumnType("decimal(18,2)");
 
@@ -625,6 +635,11 @@ namespace ECommerceStore.Infrastructure.Migrations
 
             modelBuilder.Entity("ECommerceStore.Core.Entities.ProductImage", b =>
                 {
+                    b.HasOne("ECommerceStore.Core.Entities.ProductColor", "ProductColor")
+                        .WithMany("Images")
+                        .HasForeignKey("ProductColorId")
+                        .OnDelete(DeleteBehavior.Cascade);
+
                     b.HasOne("ECommerceStore.Core.Entities.Product", "Product")
                         .WithMany("Images")
                         .HasForeignKey("ProductId")
@@ -632,6 +647,8 @@ namespace ECommerceStore.Infrastructure.Migrations
                         .IsRequired();
 
                     b.Navigation("Product");
+
+                    b.Navigation("ProductColor");
                 });
 
             modelBuilder.Entity("ECommerceStore.Core.Entities.ProductStock", b =>
@@ -739,6 +756,11 @@ namespace ECommerceStore.Infrastructure.Migrations
                     b.Navigation("Reviews");
 
                     b.Navigation("Stock");
+                });
+
+            modelBuilder.Entity("ECommerceStore.Core.Entities.ProductColor", b =>
+                {
+                    b.Navigation("Images");
                 });
 
             modelBuilder.Entity("ECommerceStore.Core.Entities.PromoCode", b =>

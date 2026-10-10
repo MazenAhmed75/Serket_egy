@@ -1,4 +1,6 @@
+using ECommerceStore.Core.Exceptions;
 using ECommerceStore.Core.Interfaces;
+using ECommerceStore.Core.Services;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 
@@ -27,24 +29,34 @@ public class ReceiptModel : PageModel
             return NotFound();
         }
 
+        if (!receipt.HasImage)
+        {
+            return NotFound();
+        }
+
         // Receipts saved before they became private are still ordinary public paths.
         if (receipt.ImagePath.StartsWith('/'))
         {
             return LocalRedirect(receipt.ImagePath);
         }
 
-        var stream = _fileStorage.OpenPrivate(receipt.ImagePath);
+        Stream? stream;
+        try
+        {
+            stream = await _fileStorage.OpenPrivateAsync(receipt.ImagePath, HttpContext.RequestAborted);
+        }
+        catch (FileStorageException)
+        {
+            // The storage service is unreachable: say so instead of showing a crash page inside an image tag.
+            return StatusCode(StatusCodes.Status503ServiceUnavailable);
+        }
+
         if (stream is null)
         {
             return NotFound();
         }
 
-        var contentType = Path.GetExtension(receipt.ImagePath).ToLowerInvariant() switch
-        {
-            ".png" => "image/png",
-            ".webp" => "image/webp",
-            _ => "image/jpeg"
-        };
+        var contentType = StoredFileNames.ContentTypeFor(receipt.ImagePath);
 
         // Never cache a payment receipt in a shared or browser cache.
         Response.Headers.CacheControl = "private, no-store";

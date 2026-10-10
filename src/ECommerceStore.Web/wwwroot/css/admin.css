@@ -446,3 +446,19 @@ form > .table-responsive + .btn-primary {
   .month-filter select { width: 100%; }
 }
 
+.btn-danger {
+  display: inline-block;
+  padding: 0.7rem 1.2rem;
+  background: var(--color-error);
+  color: #fff;
+  border: none;
+  border-radius: var(--radius-sm);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.btn-danger:hover { filter: brightness(0.92); }
+
+.receipt-deleted { margin: 0 0 0.6rem; font-style: italic; }
+

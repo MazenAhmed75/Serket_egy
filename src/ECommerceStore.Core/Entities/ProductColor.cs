@@ -23,4 +23,7 @@ public class ProductColor
 
     // Navigation
     public Product Product { get; set; } = null!;
+
+    /// <summary>The extra photos shown when this colour is chosen.</summary>
+    public ICollection<ProductImage> Images { get; set; } = new List<ProductImage>();
 }

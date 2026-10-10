@@ -1,0 +1,90 @@
+@page
+@model ECommerceStore.Web.Pages.CartModel
+@{
+    ViewData["Title"] = "Your cart";
+    var summary = Model.Summary;
+}
+
+<section class="cart">
+    <a href="/#products" class="back-link">&larr; Continue shopping</a>
+    <h1>Your cart</h1>
+
+    @if (Model.CartNotice is not null)
+    {
+        <p class="review-flash error" role="status">@Model.CartNotice</p>
+    }
+
+    @if (summary.IsEmpty)
+    {
+        <div class="cart-empty">
+            <p class="hint">Your cart is empty.</p>
+            <a href="/#products" class="btn-primary hero-btn">Shop the scrubs</a>
+        </div>
+    }
+    else
+    {
+        <div class="cart-list">
+            @foreach (var item in summary.Items)
+            {
+                <article class="cart-item @(item.Problem is not null ? "has-problem" : "")">
+                    <div class="cart-item-img"><img src="@item.ImageUrl" alt="@item.ProductName" /></div>
+
+                    <div class="cart-item-info">
+                        @if (string.IsNullOrEmpty(item.Slug))
+                        {
+                            <strong>@item.ProductName</strong>
+                        }
+                        else
+                        {
+                            <a asp-page="/Product" asp-route-slug="@item.Slug" class="cart-item-name">@item.ProductName</a>
+                        }
+                        <div class="selection-chips">
+                            <span class="selection-chip">@(item.Line.Gender == "Female" ? "Women's Fit" : "Men's Fit")</span>
+                            <span class="selection-chip">Size @item.Line.Size</span>
+                            @if (item.ColorName is not null)
+                            {
+                                <span class="selection-chip"><span class="chip-swatch" style="--swatch-color: @item.ColorHex"></span>@item.ColorName</span>
+                            }
+                        </div>
+                        @if (item.Problem is not null)
+                        {
+                            <p class="cart-problem" role="alert">@item.Problem</p>
+                        }
+                        <p class="cart-unit-price">@item.UnitPrice.ToString("N2") EGP each</p>
+                    </div>
+
+                    <div class="cart-item-actions">
+                        <form method="post" asp-page-handler="Update" class="cart-qty-form">
+                            <input type="hidden" name="key" value="@item.Line.Key" />
+                            <label class="visually-hidden" for="qty-@item.Line.Key">Quantity</label>
+                            <input id="qty-@item.Line.Key" type="number" name="quantity" value="@item.Line.Quantity" min="1" max="@(Math.Max(item.Available, item.Line.Quantity))" data-autosubmit />
+                            <button type="submit" class="link-button cart-update">Update</button>
+                        </form>
+                        <span class="cart-line-total">@item.LineTotal.ToString("N2") EGP</span>
+                        <form method="post" asp-page-handler="Remove">
+                            <input type="hidden" name="key" value="@item.Line.Key" />
+                            <button type="submit" class="link-button-danger">Remove</button>
+                        </form>
+                    </div>
+                </article>
+            }
+        </div>
+
+        <div class="cart-total-card">
+            <div class="price-line"><span>Items (@summary.ItemCount)</span><span>@summary.Subtotal.ToString("N2") EGP</span></div>
+            <p class="hint">Shipping and any promo code are added at checkout.</p>
+            @if (summary.HasProblems)
+            {
+                <p class="cart-problem">Please fix the items marked above before checking out.</p>
+            }
+            else
+            {
+                <a asp-page="/Checkout" class="btn-primary btn-cta">Proceed to checkout</a>
+            }
+        </div>
+    }
+</section>
+
+@section Scripts {
+    <script src="~/js/cart.js" asp-append-version="true"></script>
+}

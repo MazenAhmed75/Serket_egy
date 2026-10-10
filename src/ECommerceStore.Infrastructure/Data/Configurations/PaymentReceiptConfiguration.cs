@@ -19,6 +19,9 @@ public class PaymentReceiptConfiguration : IEntityTypeConfiguration<PaymentRecei
             .IsRequired()
             .HasMaxLength(500);
 
+        // Computed from ImagePath; not a column.
+        builder.Ignore(pr => pr.HasImage);
+
         builder.Property(pr => pr.TransactionReference)
             .HasMaxLength(100);
 

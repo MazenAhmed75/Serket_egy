@@ -26,9 +26,6 @@ public class ProductDisplayDto
 
     public string ImageUrl { get; set; } = string.Empty;
 
-    /// <summary>Main photo first, then any extra gallery photos in display order.</summary>
-    public IReadOnlyList<string> GalleryImages { get; set; } = Array.Empty<string>();
-
     /// <summary>Empty when this product has no colour options — the storefront shows no picker in that case.</summary>
     public IReadOnlyList<ProductColorDto> Colors { get; set; } = Array.Empty<ProductColorDto>();
 

@@ -1,5 +1,6 @@
 using ECommerceStore.Core.Entities;
 using ECommerceStore.Core.Enums;
+using ECommerceStore.Core.Exceptions;
 using ECommerceStore.Core.Interfaces;
 using ECommerceStore.Core.Services;
 using Microsoft.AspNetCore.Mvc;
@@ -10,10 +11,12 @@ namespace ECommerceStore.Web.Areas.Admin.Pages.Orders;
 public class DetailsModel : PageModel
 {
     private readonly IUnitOfWork _unitOfWork;
+    private readonly IFileStorageService _fileStorage;
 
-    public DetailsModel(IUnitOfWork unitOfWork)
+    public DetailsModel(IUnitOfWork unitOfWork, IFileStorageService fileStorage)
     {
         _unitOfWork = unitOfWork;
+        _fileStorage = fileStorage;
     }
 
     public Order? Order { get; private set; }
@@ -73,6 +76,36 @@ public class DetailsModel : PageModel
         await _unitOfWork.SaveChangesAsync();
 
         StatusMessage = "Order marked as shipped.";
+        return RedirectToPage(new { id });
+    }
+
+    /// <summary>Deletes the screenshot of one receipt to free storage; the receipt record (reference, verified flag) stays.</summary>
+    public async Task<IActionResult> OnPostDeleteReceiptAsync(Guid id, Guid receiptId)
+    {
+        var order = await _unitOfWork.Orders.GetWithDetailsAsync(id);
+        var receipt = order?.PaymentReceipts.FirstOrDefault(r => r.Id == receiptId);
+        if (receipt is null)
+        {
+            return NotFound();
+        }
+
+        if (receipt.HasImage)
+        {
+            try
+            {
+                await _fileStorage.DeleteAsync(receipt.ImagePath);
+            }
+            catch (FileStorageException)
+            {
+                StatusMessage = "The receipt image could not be deleted right now. Please try again in a moment.";
+                return RedirectToPage(new { id });
+            }
+
+            receipt.ImagePath = string.Empty;
+            await _unitOfWork.SaveChangesAsync();
+        }
+
+        StatusMessage = "Receipt image deleted.";
         return RedirectToPage(new { id });
     }
 

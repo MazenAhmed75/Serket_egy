@@ -14,8 +14,6 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     var tokenInput = form.querySelector('input[name="__RequestVerificationToken"]');
-    var productId = form.querySelector('input[name="Input.ProductId"]').value;
-    var quantity = form.querySelector('input[name="Input.Quantity"]').value;
 
     var applied = false;
 
@@ -61,8 +59,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
     function send(code) {
         var body = new FormData();
-        body.append('productId', productId);
-        body.append('quantity', quantity);
+        // The server works out the price from the cart it already holds; only the code is sent.
         body.append('promoCode', code);
 
         var headers = {};

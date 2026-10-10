@@ -1,6 +1,7 @@
 using System.ComponentModel.DataAnnotations;
 using ECommerceStore.Core.Constants;
 using ECommerceStore.Core.Entities;
+using ECommerceStore.Core.Exceptions;
 using ECommerceStore.Core.Interfaces;
 using ECommerceStore.Core.Services;
 using ECommerceStore.Web.Services;
@@ -20,12 +21,18 @@ public class EditModel : PageModel
     private readonly IUnitOfWork _unitOfWork;
     private readonly IFileStorageService _fileStorageService;
     private readonly StockReminderService _stockReminderService;
+    private readonly FileCleanup _fileCleanup;
 
-    public EditModel(IUnitOfWork unitOfWork, IFileStorageService fileStorageService, StockReminderService stockReminderService)
+    public EditModel(
+        IUnitOfWork unitOfWork,
+        IFileStorageService fileStorageService,
+        StockReminderService stockReminderService,
+        FileCleanup fileCleanup)
     {
         _unitOfWork = unitOfWork;
         _fileStorageService = fileStorageService;
         _stockReminderService = stockReminderService;
+        _fileCleanup = fileCleanup;
     }
 
     /// <summary>The product being edited (from the page address).</summary>
@@ -46,10 +53,13 @@ public class EditModel : PageModel
 
     public IReadOnlyList<ProductColor> Colors { get; private set; } = Array.Empty<ProductColor>();
 
-    public IReadOnlyList<ProductImage> GalleryImages { get; private set; } = Array.Empty<ProductImage>();
+    /// <summary>Every gallery photo of the product; use <see cref="GalleryOf"/> for one colour's photos.</summary>
+    public IReadOnlyList<ProductImage> AllGalleryImages { get; private set; } = Array.Empty<ProductImage>();
 
-    [BindProperty]
-    public List<IFormFile> GalleryFiles { get; set; } = new();
+    /// <summary>Old photos from before galleries were per colour. They are no longer shown on the site and can be removed.</summary>
+    public int LegacyGalleryCount => AllGalleryImages.Count(i => i.ProductColorId is null);
+
+    public IEnumerable<ProductImage> GalleryOf(Guid colorId) => AllGalleryImages.Where(i => i.ProductColorId == colorId);
 
     /// <summary>Photo for a new colour (optional).</summary>
     [BindProperty]
@@ -94,7 +104,7 @@ public class EditModel : PageModel
         ProductSlug = product.Slug;
         CurrentImageUrl = product.ImageUrl;
         Colors = product.Colors.OrderBy(c => c.Name).ToList();
-        GalleryImages = product.Images.OrderBy(i => i.SortOrder).ToList();
+        AllGalleryImages = product.Images.OrderBy(i => i.SortOrder).ToList();
         StockRows = BuildStockRows(product);
     }
 
@@ -120,9 +130,21 @@ public class EditModel : PageModel
             return Page();
         }
 
+        string? replacedImage = null;
         if (hasNewImage)
         {
-            existing.ImageUrl = await SaveImageAsync(Input.ImageFile!);
+            try
+            {
+                var newImage = await SaveImageAsync(Input.ImageFile!);
+                replacedImage = existing.ImageUrl;
+                existing.ImageUrl = newImage;
+            }
+            catch (FileStorageException)
+            {
+                ModelState.AddModelError("Input.ImageFile", "The photo could not be uploaded right now. Nothing was saved; please try again.");
+                Fill(existing);
+                return Page();
+            }
         }
 
         existing.Name = Input.Name.Trim();
@@ -136,6 +158,9 @@ public class EditModel : PageModel
         _unitOfWork.Products.Update(existing);
 
         await _unitOfWork.SaveChangesAsync();
+
+        // The old main photo is no longer used anywhere.
+        await _fileCleanup.DeleteQuietlyAsync(replacedImage);
 
         StatusMessage = "Product saved.";
         return Back();
@@ -166,7 +191,15 @@ public class EditModel : PageModel
                 return Back();
             }
 
-            imageUrl = await SaveImageAsync(NewColorImage);
+            try
+            {
+                imageUrl = await SaveImageAsync(NewColorImage);
+            }
+            catch (FileStorageException)
+            {
+                StatusMessage = "The photo could not be uploaded right now. The colour was not added; please try again.";
+                return Back();
+            }
         }
 
         await _unitOfWork.ProductColors.AddAsync(new ProductColor
@@ -206,8 +239,21 @@ public class EditModel : PageModel
             return Back();
         }
 
-        color.ImageUrl = await SaveImageAsync(colorImage);
+        string newImage;
+        try
+        {
+            newImage = await SaveImageAsync(colorImage);
+        }
+        catch (FileStorageException)
+        {
+            StatusMessage = "The photo could not be uploaded right now. Please try again.";
+            return Back();
+        }
+
+        var oldImage = color.ImageUrl;
+        color.ImageUrl = newImage;
         await _unitOfWork.SaveChangesAsync();
+        await _fileCleanup.DeleteQuietlyAsync(oldImage);
 
         StatusMessage = $"Photo saved for \"{color.Name}\".";
         return Back();
@@ -218,8 +264,10 @@ public class EditModel : PageModel
         var color = await _unitOfWork.ProductColors.GetByIdAsync(colorId);
         if (color is not null)
         {
+            var oldImage = color.ImageUrl;
             color.ImageUrl = null;
             await _unitOfWork.SaveChangesAsync();
+            await _fileCleanup.DeleteQuietlyAsync(oldImage);
             StatusMessage = $"Photo removed from \"{color.Name}\".";
         }
 
@@ -296,33 +344,43 @@ public class EditModel : PageModel
         var color = await _unitOfWork.ProductColors.GetByIdAsync(colorId);
         if (color is not null)
         {
+            // The colour's gallery rows are removed with it; remember their files so they can be deleted too.
+            var product = await _unitOfWork.Products.GetWithColorsAsync(Id);
+            var files = product is null
+                ? new List<string?>()
+                : product.Images.Where(i => i.ProductColorId == colorId).Select(i => (string?)i.ImageUrl).ToList();
+            files.Add(color.ImageUrl);
+
             _unitOfWork.ProductColors.Remove(color);
             await _unitOfWork.SaveChangesAsync();
+            await _fileCleanup.DeleteQuietlyAsync(files.ToArray());
             StatusMessage = $"Removed \"{color.Name}\".";
         }
 
         return Back();
     }
 
-    public async Task<IActionResult> OnPostAddGalleryImagesAsync()
+    /// <param name="galleryFiles">The photos chosen in that colour's upload box (bound by name, not as a page-wide property).</param>
+    public async Task<IActionResult> OnPostAddColorGalleryAsync(Guid colorId, [FromForm(Name = "galleryFiles")] List<IFormFile> galleryFiles)
     {
         var product = await _unitOfWork.Products.GetWithColorsAsync(Id);
-        if (product is null)
+        if (product is null || product.Colors.All(c => c.Id != colorId))
         {
-            StatusMessage = "Save the product before adding photos.";
+            StatusMessage = "That colour no longer exists.";
             return Back();
         }
 
-        var files = GalleryFiles.Where(f => f.Length > 0).ToList();
+        var files = galleryFiles.Where(f => f.Length > 0).ToList();
         if (files.Count == 0)
         {
             StatusMessage = "Choose at least one photo to upload.";
             return Back();
         }
 
-        if (product.Images.Count + files.Count > MaxGalleryImages)
+        var existing = product.Images.Where(i => i.ProductColorId == colorId).ToList();
+        if (existing.Count + files.Count > MaxGalleryImages)
         {
-            StatusMessage = $"A product can have up to {MaxGalleryImages} extra photos.";
+            StatusMessage = $"A colour can have up to {MaxGalleryImages} gallery photos.";
             return Back();
         }
 
@@ -333,22 +391,58 @@ public class EditModel : PageModel
             return Back();
         }
 
-        var nextOrder = product.Images.Count == 0 ? 1 : product.Images.Max(i => i.SortOrder) + 1;
-        foreach (var file in files)
+        var nextOrder = existing.Count == 0 ? 1 : existing.Max(i => i.SortOrder) + 1;
+        var uploaded = new List<string>();
+        try
         {
-            await using var stream = file.OpenReadStream();
-            var path = await _fileStorageService.SaveAsync(stream, file.FileName, "products");
-            await _unitOfWork.ProductImages.AddAsync(new ProductImage
+            foreach (var file in files)
             {
-                Id = Guid.NewGuid(),
-                ProductId = product.Id,
-                ImageUrl = path,
-                SortOrder = nextOrder++
-            });
+                await using var stream = file.OpenReadStream();
+                var path = await _fileStorageService.SaveAsync(stream, file.FileName, "products");
+                uploaded.Add(path);
+                await _unitOfWork.ProductImages.AddAsync(new ProductImage
+                {
+                    Id = Guid.NewGuid(),
+                    ProductId = product.Id,
+                    ProductColorId = colorId,
+                    ImageUrl = path,
+                    SortOrder = nextOrder++
+                });
+            }
+        }
+        catch (FileStorageException)
+        {
+            // All or nothing: take back the photos of this batch that did upload.
+            await _fileCleanup.DeleteQuietlyAsync(uploaded.ToArray());
+            StatusMessage = "The photos could not be uploaded right now. Nothing was added; please try again.";
+            return Back();
         }
 
         await _unitOfWork.SaveChangesAsync();
         StatusMessage = files.Count == 1 ? "Photo added." : $"{files.Count} photos added.";
+        return Back();
+    }
+
+    /// <summary>Deletes the old general gallery photos (from before galleries were per colour); they are not shown on the site any more.</summary>
+    public async Task<IActionResult> OnPostRemoveLegacyGalleryAsync()
+    {
+        var product = await _unitOfWork.Products.GetWithColorsAsync(Id);
+        if (product is null)
+        {
+            return NotFound();
+        }
+
+        var legacy = product.Images.Where(i => i.ProductColorId is null).ToList();
+        var files = legacy.Select(i => (string?)i.ImageUrl).ToArray();
+        foreach (var image in legacy)
+        {
+            _unitOfWork.ProductImages.Remove(image);
+        }
+
+        await _unitOfWork.SaveChangesAsync();
+        await _fileCleanup.DeleteQuietlyAsync(files);
+
+        StatusMessage = legacy.Count == 1 ? "1 old photo removed." : $"{legacy.Count} old photos removed.";
         return Back();
     }
 
@@ -357,8 +451,10 @@ public class EditModel : PageModel
         var image = await _unitOfWork.ProductImages.GetByIdAsync(imageId);
         if (image is not null)
         {
+            var oldImage = image.ImageUrl;
             _unitOfWork.ProductImages.Remove(image);
             await _unitOfWork.SaveChangesAsync();
+            await _fileCleanup.DeleteQuietlyAsync(oldImage);
             StatusMessage = "Photo removed.";
         }
 

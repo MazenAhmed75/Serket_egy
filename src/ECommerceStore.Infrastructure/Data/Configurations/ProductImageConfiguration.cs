@@ -27,5 +27,11 @@ public class ProductImageConfiguration : IEntityTypeConfiguration<ProductImage>
             .WithMany(p => p.Images)
             .HasForeignKey(i => i.ProductId)
             .OnDelete(DeleteBehavior.Cascade);
+
+        // A gallery photo belongs to one colour; removing the colour removes its photos.
+        builder.HasOne(i => i.ProductColor)
+            .WithMany(c => c.Images)
+            .HasForeignKey(i => i.ProductColorId)
+            .OnDelete(DeleteBehavior.Cascade);
     }
 }

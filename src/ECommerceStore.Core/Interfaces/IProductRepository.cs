@@ -7,6 +7,9 @@ public interface IProductRepository : IRepository<Product>
     /// <summary>Every active product in display order, with colours, extra photos and stock loaded (home page).</summary>
     Task<IReadOnlyList<Product>> GetActiveProductsAsync();
 
+    /// <summary>The active products with these ids, with colours, photos and stock loaded (read-only; used to price a cart).</summary>
+    Task<IReadOnlyList<Product>> GetActiveByIdsAsync(IReadOnlyCollection<Guid> ids);
+
     /// <summary>The active product with this slug, with colours, extra photos and stock loaded (product page).</summary>
     Task<Product?> GetActiveBySlugAsync(string slug);
 
