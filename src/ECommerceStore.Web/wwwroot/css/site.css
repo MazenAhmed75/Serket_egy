@@ -2926,12 +2926,140 @@ a.contact-link:hover { color: var(--color-gold); }
 
 .cart-problem { margin: 0; color: var(--color-error); font-size: 0.88rem; font-weight: 600; }
 
-.cart-item-actions { display: flex; flex-direction: column; align-items: flex-end; gap: 0.5rem; }
+.cart-item-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
 
-.cart-qty-form { display: flex; align-items: center; gap: 0.5rem; margin: 0; }
-.cart-qty-form input[type="number"] { width: 4.5rem; margin: 0; text-align: center; }
+.cart-qty-form {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0;
+}
 
-.cart-line-total { font-weight: 700; color: var(--color-ink); white-space: nowrap; }
+.cart-qty-wrapper {
+  display: inline-flex;
+  align-items: center;
+  background: var(--color-surface-subtle);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-sm);
+  padding: 0.25rem 0.5rem;
+  transition: all 0.2s ease;
+}
+
+.cart-qty-wrapper:focus-within {
+  border-color: var(--color-gold);
+  box-shadow: 0 0 0 2px var(--color-gold-glow);
+  background: var(--color-surface);
+}
+
+.cart-qty-label {
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-ink-muted);
+  margin-right: 0.35rem;
+  user-select: none;
+}
+
+.cart-qty-form input[type="number"] {
+  width: 2.75rem;
+  margin: 0;
+  padding: 0.15rem 0.2rem;
+  border: none;
+  background: transparent;
+  text-align: center;
+  font-family: var(--font-body);
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--color-ink);
+  outline: none;
+  -moz-appearance: textfield;
+}
+
+.cart-qty-form input[type="number"]::-webkit-outer-spin-button,
+.cart-qty-form input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.cart-btn-update {
+  background: transparent;
+  color: var(--color-gold);
+  border: 1px solid var(--color-gold-glow);
+  padding: 0.35rem 0.65rem;
+  font-family: var(--font-body);
+  font-size: 0.78rem;
+  font-weight: 600;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.cart-btn-update:hover {
+  background: var(--color-gold-subtle);
+  border-color: var(--color-gold);
+  color: var(--color-gold-hover);
+}
+
+/* When JavaScript is running and auto-submits on change, keep Update button subtle or accessible */
+.js-loaded .cart-btn-update {
+  display: none;
+}
+
+.cart-line-total {
+  font-family: var(--font-body);
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--color-ink);
+  white-space: nowrap;
+}
+
+.cart-line-total small {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--color-ink-muted);
+  margin-left: 0.15rem;
+}
+
+.cart-remove-form {
+  margin: 0;
+}
+
+.cart-btn-remove {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--color-ink-muted);
+  font-family: var(--font-body);
+  font-size: 0.8rem;
+  font-weight: 500;
+  padding: 0.3rem 0.6rem;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.cart-btn-remove svg {
+  transition: transform 0.2s ease;
+}
+
+.cart-btn-remove:hover {
+  color: var(--color-error);
+  background: var(--color-error-bg);
+  border-color: rgba(184, 50, 38, 0.2);
+}
+
+.cart-btn-remove:hover svg {
+  transform: scale(1.1);
+}
 
 .cart-total-card {
   padding: 1.25rem 1.5rem;
