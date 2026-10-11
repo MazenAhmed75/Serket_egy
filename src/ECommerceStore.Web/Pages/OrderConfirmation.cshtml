@@ -35,7 +35,7 @@
             <div class="confirmation-details-box">
                 <div class="details-box-header">
                     <h3>Order Summary</h3>
-                    <span class="order-date">@o.CreatedAt.ToLocalTime().ToString("dd MMM yyyy, HH:mm")</span>
+                    <span class="order-date">@o.CreatedAt.ToEgyptTime().ToString("dd MMM yyyy, HH:mm")</span>
                 </div>
                 <dl class="confirmation-dl">
                     <dt>@(o.Items.Count == 1 ? "Item" : "Items")</dt>

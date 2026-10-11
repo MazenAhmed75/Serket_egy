@@ -115,7 +115,7 @@ else
                         <td>@order.Customer.FullName</td>
                         <td>@order.TotalAmount.ToString("N2") EGP</td>
                         <td><span class="status-badge status-@order.OrderStatus.ToString().ToLowerInvariant()">@order.OrderStatus</span></td>
-                        <td>@order.CreatedAt.ToLocalTime().ToString("dd MMM, HH:mm")</td>
+                        <td>@order.CreatedAt.ToEgyptTime().ToString("dd MMM, HH:mm")</td>
                         <td><a asp-area="Admin" asp-page="/Orders/Details" asp-route-id="@order.Id">View</a></td>
                     </tr>
                 }

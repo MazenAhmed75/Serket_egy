@@ -103,7 +103,7 @@ else
                                 <p class="hint receipt-deleted">Receipt image deleted.</p>
                             }
                             <dl class="admin-dl">
-                                <dt>Uploaded</dt><dd>@receipt.UploadedAt.ToLocalTime().ToString("dd MMM yyyy, HH:mm")</dd>
+                                <dt>Uploaded</dt><dd>@receipt.UploadedAt.ToEgyptTime().ToString("dd MMM yyyy, HH:mm")</dd>
                                 <dt>Reference</dt><dd>@(receipt.TransactionReference ?? "—")</dd>
                                 <dt>Verified</dt><dd>@(receipt.IsVerified ? "Yes" : "No")</dd>
                             </dl>
