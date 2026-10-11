@@ -18,6 +18,7 @@ public class OrderRepository : Repository<Order>, IOrderRepository
             .Include(o => o.OrderItems)
                 .ThenInclude(oi => oi.Product)
             .Include(o => o.PaymentReceipts)
+            .AsSplitQuery()
             .FirstOrDefaultAsync(o => o.OrderNumber == orderNumber);
 
     public async Task<Order?> GetWithDetailsAsync(Guid orderId) =>
@@ -26,6 +27,7 @@ public class OrderRepository : Repository<Order>, IOrderRepository
             .Include(o => o.OrderItems)
                 .ThenInclude(oi => oi.Product)
             .Include(o => o.PaymentReceipts)
+            .AsSplitQuery()
             .FirstOrDefaultAsync(o => o.Id == orderId);
 
     public async Task<IReadOnlyList<PaymentReceipt>> GetReceiptsWithImagesForFinishedOrdersAsync(DateTime createdBeforeUtc, int take) =>
@@ -44,6 +46,7 @@ public class OrderRepository : Repository<Order>, IOrderRepository
             .Include(o => o.OrderItems)
                 .ThenInclude(oi => oi.Product)
             .Include(o => o.PaymentReceipts)
+            .AsSplitQuery()
             .AsQueryable();
 
         if (!string.IsNullOrWhiteSpace(orderNumberContains))

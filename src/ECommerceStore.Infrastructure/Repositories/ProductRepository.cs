@@ -15,7 +15,8 @@ public class ProductRepository : Repository<Product>, IProductRepository
         DbSet
             .Include(p => p.Colors)
             .Include(p => p.Images)
-            .Include(p => p.Stock);
+            .Include(p => p.Stock)
+            .AsSplitQuery();
 
     // The public pages only read products, so they skip change tracking (faster, less memory per visitor).
     public async Task<IReadOnlyList<Product>> GetActiveProductsAsync() =>

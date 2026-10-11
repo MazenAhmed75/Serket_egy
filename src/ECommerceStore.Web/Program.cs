@@ -222,11 +222,15 @@ if (!app.Environment.IsDevelopment())
         app.Logger.LogWarning("AllowedHosts is '*'. In production set it to your domain (environment variable AllowedHosts).");
     }
 }
+else
+{
+    // Only redirect to HTTPS during local development; production hosts (Render, etc.)
+    // terminate TLS at the reverse proxy, so the app never sees an HTTPS port.
+    app.UseHttpsRedirection();
+}
 
 // Friendly pages for 404, 429 and other empty error responses.
 app.UseStatusCodePagesWithReExecute("/Error/{0}");
-
-app.UseHttpsRedirection();
 
 // Security headers go first so they also cover static files (uploaded images included).
 // script-src has no 'unsafe-inline': every script is a file served from this site.
