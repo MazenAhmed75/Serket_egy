@@ -2986,3 +2986,6 @@ a.contact-link:hover { color: var(--color-gold); }
   .summary-item-total { grid-column: 2; justify-self: start; }
 }
 
+
+.error-details { margin-top: 1.5rem; text-align: left; font-size: 0.85rem; }
+.error-details pre { white-space: pre-wrap; overflow-wrap: anywhere; background: var(--color-surface-subtle); padding: 0.8rem; border-radius: var(--radius-sm); }

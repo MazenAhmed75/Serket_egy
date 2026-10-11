@@ -13,4 +13,11 @@
     {
         <p class="hint error-ref">If it keeps happening, tell us this reference: <code>@Model.RequestId</code></p>
     }
+    @if (Model.TechnicalDetails is not null)
+    {
+        <details class="error-details" open>
+            <summary>Technical details (only you can see this, because you are logged in to the admin)</summary>
+            <pre>@Model.TechnicalDetails</pre>
+        </details>
+    }
 </section>

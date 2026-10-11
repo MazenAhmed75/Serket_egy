@@ -305,11 +305,35 @@ public class CheckoutModel : PageModel
 
         await transaction.CommitAsync();
 
-        // The order is saved. Nothing below may stop the customer from reaching the confirmation page.
-        _cartStore.Clear(HttpContext);
+        return AfterOrderSaved(order, summary, customer);
+    }
+
+    /// <summary>
+    /// The order is saved. Nothing in here may turn into an error page for the customer: every step is guarded, and if
+    /// even the confirmation link can't be made, a plain "order placed" page with the order number is shown instead.
+    /// </summary>
+    private IActionResult AfterOrderSaved(Order order, CartSummary summary, Customer customer)
+    {
+        try
+        {
+            _cartStore.Clear(HttpContext);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Order {OrderNumber} was saved but the cart cookie could not be cleared.", order.OrderNumber);
+        }
+
         QueueNotifications(order, summary, customer);
 
-        return RedirectToPage("/OrderConfirmation", new { t = _confirmationLinks.CreateToken(order.OrderNumber) });
+        try
+        {
+            return RedirectToPage("/OrderConfirmation", new { t = _confirmationLinks.CreateToken(order.OrderNumber) });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Order {OrderNumber} was saved but its confirmation link could not be created.", order.OrderNumber);
+            return RedirectToPage("/OrderPlaced", new { n = order.OrderNumber });
+        }
     }
 
     /// <summary>Hands the owner alert and the customer's receipt to the background sender (never throws).</summary>

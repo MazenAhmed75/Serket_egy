@@ -1,0 +1,15 @@
+@page
+@model ECommerceStore.Web.Pages.OrderPlacedModel
+@{
+    ViewData["Title"] = "Order placed";
+}
+
+<section class="auth-card error-card">
+    <h1>Thank you, your order was placed</h1>
+    @if (Model.OrderNumber.Length > 0)
+    {
+        <p class="hint">Your order number is <strong>@Model.OrderNumber</strong>. Keep it in case you need to contact us.</p>
+    }
+    <p class="hint">We will be in touch about your delivery.</p>
+    <p class="error-actions"><a href="/" class="btn-primary hero-btn">Back to the home page</a></p>
+</section>
