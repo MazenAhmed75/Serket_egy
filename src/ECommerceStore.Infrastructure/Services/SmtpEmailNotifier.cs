@@ -53,9 +53,9 @@ public class SmtpEmailNotifier : IEmailNotifier
 
         var port = int.TryParse(_configuration["Email:SmtpPort"], out var parsedPort) ? parsedPort : 587;
         var useSsl = !bool.TryParse(_configuration["Email:UseSsl"], out var parsedUseSsl) || parsedUseSsl;
-        var username = _configuration["Email:SmtpUsername"];
-        var password = _configuration["Email:SmtpPassword"] ?? string.Empty;
-        var fromAddress = _configuration["Email:FromAddress"] ?? username ?? toAddress;
+        var username = _configuration["Email:SmtpUsername"]?.Trim();
+        var password = _configuration["Email:SmtpPassword"]?.Trim() ?? string.Empty;
+        var fromAddress = _configuration["Email:FromAddress"]?.Trim() ?? username ?? toAddress;
         var fromName = _configuration["Email:FromName"] ?? "Serket Store";
 
         // A mail server that doesn't answer (some hosts block outgoing mail ports) must not hold anything up for minutes.
@@ -72,8 +72,17 @@ public class SmtpEmailNotifier : IEmailNotifier
             message.Body = new TextPart("plain") { Text = body };
 
             using var client = new SmtpClient { Timeout = (int)SendTimeout.TotalMilliseconds };
-            var socketOptions = useSsl ? SecureSocketOptions.StartTls : SecureSocketOptions.Auto;
 
+            // Determine appropriate TLS option based on port
+            var socketOptions = port switch
+            {
+                465 => SecureSocketOptions.SslOnConnect,
+                587 => SecureSocketOptions.StartTls,
+                25 => SecureSocketOptions.StartTlsWhenAvailable,
+                _ => useSsl ? SecureSocketOptions.Auto : SecureSocketOptions.None
+            };
+
+            _logger.LogInformation("Connecting to SMTP {Host}:{Port} with {Security}...", host, port, socketOptions);
             await client.ConnectAsync(host, port, socketOptions, cancellationToken);
 
             if (!string.IsNullOrWhiteSpace(username))
@@ -83,12 +92,13 @@ public class SmtpEmailNotifier : IEmailNotifier
 
             await client.SendAsync(message, cancellationToken);
             await client.DisconnectAsync(true, cancellationToken);
+            _logger.LogInformation("Email sent successfully to {Recipient} (Subject: {Subject}).", toAddress, subject);
             return true;
         }
         catch (Exception ex)
         {
             // An e-mail failure (including a timeout) must never break order placement or stock updates.
-            _logger.LogError(ex, "Failed to send email to {Recipient}.", toAddress);
+            _logger.LogError(ex, "Failed to send email to {Recipient} via {Host}:{Port}.", toAddress, host, port);
             return false;
         }
     }
