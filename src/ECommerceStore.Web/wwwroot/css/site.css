@@ -2941,51 +2941,48 @@ a.contact-link:hover { color: var(--color-gold); }
   margin: 0;
 }
 
-.cart-qty-wrapper {
-  display: inline-flex;
-  align-items: center;
-  background: var(--color-surface-subtle);
+.cart-stepper {
+  height: 2.25rem;
+  background: var(--color-surface);
   border: 1px solid var(--color-line);
   border-radius: var(--radius-sm);
-  padding: 0.25rem 0.5rem;
+  box-shadow: var(--shadow-xs);
   transition: all 0.2s ease;
 }
 
-.cart-qty-wrapper:focus-within {
+.cart-stepper:focus-within {
   border-color: var(--color-gold);
   box-shadow: 0 0 0 2px var(--color-gold-glow);
-  background: var(--color-surface);
 }
 
-.cart-qty-label {
-  font-size: 0.72rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--color-ink-muted);
-  margin-right: 0.35rem;
-  user-select: none;
+.cart-stepper .qty-btn {
+  width: 2.1rem;
+  font-size: 1.15rem;
+  color: var(--color-ink-soft);
+  transition: background 0.15s ease, color 0.15s ease;
 }
 
-.cart-qty-form input[type="number"] {
-  width: 2.75rem;
-  margin: 0;
-  padding: 0.15rem 0.2rem;
-  border: none;
-  background: transparent;
-  text-align: center;
-  font-family: var(--font-body);
+.cart-stepper .qty-btn:hover:not(:disabled) {
+  background: var(--color-surface-hover);
+  color: var(--color-gold);
+}
+
+.cart-stepper .qty-btn:disabled {
+  color: var(--color-line);
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.cart-stepper input[type="number"] {
+  width: 2.5rem;
+  border-left: 1px solid var(--color-line);
+  border-right: 1px solid var(--color-line);
   font-size: 0.95rem;
   font-weight: 700;
   color: var(--color-ink);
-  outline: none;
-  -moz-appearance: textfield;
-}
-
-.cart-qty-form input[type="number"]::-webkit-outer-spin-button,
-.cart-qty-form input[type="number"]::-webkit-inner-spin-button {
-  -webkit-appearance: none;
-  margin: 0;
+  background: transparent;
+  padding: 0;
+  text-align: center;
 }
 
 .cart-btn-update {

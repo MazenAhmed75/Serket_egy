@@ -57,9 +57,10 @@
                         <form method="post" asp-page-handler="Update" class="cart-qty-form">
                             <input type="hidden" name="key" value="@item.Line.Key" />
                             <label class="visually-hidden" for="qty-@item.Line.Key">Quantity</label>
-                            <div class="cart-qty-wrapper">
-                                <span class="cart-qty-label">Qty</span>
-                                <input id="qty-@item.Line.Key" type="number" name="quantity" value="@item.Line.Quantity" min="1" max="@(Math.Max(item.Available, item.Line.Quantity))" data-autosubmit />
+                            <div class="qty-stepper cart-stepper">
+                                <button type="button" class="qty-btn qty-minus" aria-label="Decrease quantity">&minus;</button>
+                                <input id="qty-@item.Line.Key" type="number" name="quantity" value="@item.Line.Quantity" min="1" max="@(Math.Max(item.Available, item.Line.Quantity))" data-autosubmit required />
+                                <button type="button" class="qty-btn qty-plus" aria-label="Increase quantity">&plus;</button>
                             </div>
                             <button type="submit" class="cart-btn-update" title="Update quantity">Update</button>
                         </form>
@@ -97,5 +98,6 @@
 </section>
 
 @section Scripts {
+    <script src="~/js/quantity-stepper.js" asp-append-version="true"></script>
     <script src="~/js/cart.js" asp-append-version="true"></script>
 }
